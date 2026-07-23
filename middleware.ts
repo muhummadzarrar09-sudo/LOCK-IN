@@ -1,37 +1,84 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
+import { createServerClient } from '@supabase/ssr';
 
 export async function middleware(request: NextRequest) {
-  // Skip middleware for auth pages and static assets
-  if (
-    request.nextUrl.pathname.startsWith('/auth') ||
-    request.nextUrl.pathname.startsWith('/_next') ||
-    request.nextUrl.pathname.includes('.')
-  ) {
-    return NextResponse.next();
+  let supabaseResponse = NextResponse.next({
+    request,
+  });
+
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://placeholder.supabase.co';
+  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.placeholder';
+
+  const supabase = createServerClient(supabaseUrl, supabaseAnonKey, {
+    cookies: {
+      getAll() {
+        return request.cookies.getAll();
+      },
+      setAll(cookiesToSet) {
+        cookiesToSet.forEach(({ name, value }) =>
+          request.cookies.set(name, value)
+        );
+        supabaseResponse = NextResponse.next({
+          request,
+        });
+        cookiesToSet.forEach(({ name, value, options }) =>
+          supabaseResponse.cookies.set(name, value, options)
+        );
+      },
+    },
+  });
+
+  // Validate and refresh session
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  const pathname = request.nextUrl.pathname;
+
+  const isStatic =
+    pathname.startsWith('/_next') ||
+    pathname.startsWith('/favicon') ||
+    pathname.includes('.') && !pathname.startsWith('/dashboard') && !pathname.startsWith('/admin');
+
+  // Still return response with refreshed cookies for static if needed
+  if (pathname.startsWith('/_next') || pathname.includes('favicon.ico') || pathname.match(/\.(svg|png|jpg|jpeg|gif|webp|ico|css|js|map)$/)) {
+    return supabaseResponse;
   }
 
   const protectedPaths = ['/dashboard', '/schedule', '/team', '/reports', '/community', '/admin'];
-  const isProtected = protectedPaths.some(path => request.nextUrl.pathname.startsWith(path));
+  const isProtected = protectedPaths.some((p) => pathname.startsWith(p));
+  const isAuthPage = pathname.startsWith('/auth');
 
-  // Check auth cookie presence directly (avoids server session resolution in middleware)
-  const authCookie = request.cookies.get('sb-access-token') || request.cookies.get('supabase-auth-token');
-
-  if (isProtected && !authCookie) {
+  if (isProtected && !user) {
     const redirectUrl = new URL('/auth/login', request.url);
-    redirectUrl.searchParams.set('redirect', request.nextUrl.pathname);
-    return NextResponse.redirect(redirectUrl);
+    redirectUrl.searchParams.set('redirect', pathname + request.nextUrl.search);
+    const redirectResponse = NextResponse.redirect(redirectUrl);
+    // Forward refreshed cookies
+    supabaseResponse.cookies.getAll().forEach((cookie) => {
+      redirectResponse.cookies.set(cookie.name, cookie.value, cookie as any);
+    });
+    return redirectResponse;
   }
 
-  // Auth pages redirect to dashboard if cookie present
-  if (request.nextUrl.pathname.startsWith('/auth') && authCookie) {
-    const redirectTo = request.nextUrl.searchParams.get('redirect') || '/dashboard';
-    return NextResponse.redirect(new URL(redirectTo, request.url));
+  if (isAuthPage && user) {
+    const requestedRedirect = request.nextUrl.searchParams.get('redirect');
+    const target =
+      requestedRedirect && requestedRedirect.startsWith('/') ? requestedRedirect : '/dashboard';
+    if (!target.startsWith('/auth')) {
+      const redirectResponse = NextResponse.redirect(new URL(target, request.url));
+      supabaseResponse.cookies.getAll().forEach((cookie) => {
+        redirectResponse.cookies.set(cookie.name, cookie.value, cookie as any);
+      });
+      return redirectResponse;
+    }
   }
 
-  return NextResponse.next();
+  return supabaseResponse;
 }
 
 export const config = {
-  matcher: ['/((?!api|_next/static|_next/image|favicon.ico|.*\\..*).*)'],
+  matcher: [
+    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+  ],
 };

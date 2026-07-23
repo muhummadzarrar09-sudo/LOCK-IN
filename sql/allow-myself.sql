@@ -1,27 +1,31 @@
 -- ============================================================
--- LOCK-IN — MANUAL ACCESS SCRIPT (Run in SQL Editor)
--- Allows: muhummadzarrar09@gmail.com
--- Gives: admin role, creates profile if missing, ensures cohort exists
+-- LOCK-IN — MANUAL ACCESS SCRIPT (FIXED VERSION)
+-- Run in Supabase SQL Editor
+-- This version fixes id mismatch bug that caused admin stuck
 -- ============================================================
 
--- 1. Create/Update profile for this user (admin access)
--- Note: This assumes the auth user exists. If auth user doesn't exist,
--- create the account via the app signup page first.
-INSERT INTO profiles (id, username, email, role)
-VALUES (
-  (SELECT id FROM auth.users WHERE email = 'muhummadzarrar09@gmail.com'),
-  'muhummadzarrar',
-  'muhummadzarrar09@gmail.com',
-  'admin'
-)
-ON CONFLICT (email) DO UPDATE SET
-  role = EXCLUDED.role,
-  username = EXCLUDED.username;
+-- Robust fix: ensures profile id matches auth.users id
+DO $$
+DECLARE
+  v_email TEXT := 'muhummadzarrar09@gmail.com';
+  v_user_id UUID;
+BEGIN
+  SELECT id INTO v_user_id FROM auth.users WHERE email = v_email;
+  IF v_user_id IS NULL THEN
+    RAISE EXCEPTION 'No auth user for %. Sign up first.', v_email;
+  END IF;
 
--- 2. Ensure a cohort exists (so admin panel works)
+  INSERT INTO profiles (id, username, email, role)
+  VALUES (v_user_id, 'muhummadzarrar', v_email, 'admin')
+  ON CONFLICT (id) DO UPDATE SET role = 'admin', username = 'muhummadzarrar', email = v_email;
+
+  DELETE FROM profiles WHERE email = v_email AND id <> v_user_id;
+END $$;
+
+-- Ensure cohort exists
 INSERT INTO cohorts (name, start_date, end_date, enrollment_open)
 VALUES ('Aug 2026 Cohort', '2026-08-01', '2026-08-30', true)
 ON CONFLICT DO NOTHING;
 
--- 3. Confirm the user is set
-SELECT * FROM profiles WHERE email = 'muhummadzarrar09@gmail.com';
+-- Verify
+SELECT p.*, u.email as auth_email FROM profiles p JOIN auth.users u ON p.id = u.id WHERE p.email = 'muhummadzarrar09@gmail.com';
