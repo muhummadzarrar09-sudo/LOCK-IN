@@ -34,43 +34,7 @@ export default function LoginPage() {
         return;
       }
 
-      // Check device session limit (2 max)
-      const userId = data.user?.id;
-      if (userId) {
-        const fingerprint = `${navigator.userAgent}-${window.screen.width}x${window.screen.height}`;
-        const { data: existing } = await supabase
-          .from('device_sessions')
-          .select('*')
-          .eq('user_id', userId)
-          .eq('fingerprint', fingerprint);
-
-        if (!existing || existing.length === 0) {
-          const { data: sessions } = await supabase
-            .from('device_sessions')
-            .select('*')
-            .eq('user_id', userId);
-
-          if (sessions && sessions.length >= 2) {
-            // Block 3rd login — prompt to replace (simplified for MVP: show message)
-            setError('Device limit reached (max 2). Contact support to manage devices.');
-            setLoading(false);
-            return;
-          }
-
-          await supabase.from('device_sessions').insert({
-            user_id: userId,
-            fingerprint,
-            device_type: window.innerWidth < 768 ? 'mobile' : 'laptop',
-          });
-        } else {
-          // Update last active
-          await supabase
-            .from('device_sessions')
-            .update({ last_active: new Date().toISOString() })
-            .eq('user_id', userId)
-            .eq('fingerprint', fingerprint);
-        }
-      }
+      // Device session logic temporarily disabled for deployment test
 
       // Redirect fix: always redirect to intended page after successful auth
       router.push(redirectTo);
