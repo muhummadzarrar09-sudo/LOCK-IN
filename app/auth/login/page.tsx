@@ -1,17 +1,17 @@
 "use client";
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 
-export default function LoginPage() {
+function LoginForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const redirectTo = searchParams.get('redirect') || '/dashboard';
+
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-
-  const searchParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : new URLSearchParams();
-  const redirectTo = searchParams.get('redirect') || '/dashboard';
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -34,13 +34,60 @@ export default function LoginPage() {
         return;
       }
 
-      // Device session logic temporarily disabled for deployment test
+      if (!data.user) {
+        setError('No user returned. Please try again.');
+        setLoading(false);
+        return;
+      }
 
-      // Redirect fix: always redirect to intended page after successful auth
-      router.push(redirectTo);
-      router.refresh();
+      let role: string | null = null;
+      try {
+        const { data: profile, error: profileError } = await supabase
+          .from('profiles')
+          .select('role')
+          .eq('id', data.user.id)
+          .single();
+
+        if (profileError) {
+          console.warn('Profile fetch error (non-fatal):', profileError.message);
+          if (profileError.code === 'PGRST116') {
+            const username = data.user.email?.split('@')[0] || 'member';
+            await supabase.from('profiles').upsert(
+              {
+                id: data.user.id,
+                username,
+                email: data.user.email || email,
+                role: 'member',
+              },
+              { onConflict: 'id' }
+            );
+          }
+        } else {
+          role = (profile as any)?.role ?? null;
+        }
+      } catch (profErr) {
+        console.warn('Profile fetch threw:', profErr);
+      }
+
+      let finalTarget = redirectTo;
+      const isExplicitRedirect = searchParams.has('redirect');
+      if (!isExplicitRedirect) {
+        if (role === 'admin') {
+          finalTarget = '/admin';
+        } else {
+          finalTarget = '/dashboard';
+        }
+      }
+
+      setLoading(true);
+      if (typeof window !== 'undefined') {
+        window.location.href = finalTarget;
+      } else {
+        router.push(finalTarget);
+        router.refresh();
+      }
     } catch (err: any) {
-      setError(err.message || 'Unexpected error');
+      setError(err?.message || 'Unexpected error');
       setLoading(false);
     }
   };
@@ -94,7 +141,7 @@ export default function LoginPage() {
       </form>
 
       <div className="mt-6 pt-6 border-t border-neutral-800 text-center">
-        <p className="text-xs text-neutral-500 mb-1">Bought access but can't sign in?</p>
+        <p className="text-xs text-neutral-500 mb-1">Bought access but can&apos;t sign in?</p>
         <a href="mailto:support@accountability.com" className="text-xs text-amber-400 hover:text-amber-300 underline underline-offset-4">
           Contact Support
         </a>
@@ -102,5 +149,13 @@ export default function LoginPage() {
         <span className="text-xs text-neutral-500">Phone available after purchase confirmation.</span>
       </div>
     </>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={<div className="text-sm text-neutral-500 animate-pulse">Loading...</div>}>
+      <LoginForm />
+    </Suspense>
   );
 }

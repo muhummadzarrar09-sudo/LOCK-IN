@@ -34,21 +34,41 @@ export default function SignupPage() {
         return;
       }
 
-      // Create profile immediately
+      // Create profile immediately if user exists
+      // Note: if email confirmation is required, session will be null but user id exists
+      // We still attempt to insert profile - RLS requires auth.uid() = id, so this will
+      // only work if session exists. If not, profile will be created on first login.
       if (data.user) {
-        await supabase.from('profiles').insert({
-          id: data.user.id,
-          username,
-          email,
-          role: 'member',
-        });
+        // Only attempt if we have a session (auth.uid() will be set)
+        const { data: sessionData } = await supabase.auth.getSession();
+        if (sessionData.session) {
+          const { error: profileError } = await supabase.from('profiles').insert({
+            id: data.user.id,
+            username,
+            email,
+            role: 'member',
+          } as any);
+          if (profileError) {
+            console.warn('Profile insert warning:', profileError.message);
+            // Try upsert if conflict
+            await supabase.from('profiles').upsert(
+              {
+                id: data.user.id,
+                username,
+                email,
+                role: 'member',
+              } as any,
+              { onConflict: 'id' }
+            );
+          }
+        }
       }
 
       setSuccess(true);
       setLoading(false);
       setTimeout(() => router.push('/auth/login'), 1500);
     } catch (err: any) {
-      setError(err.message || 'Unexpected error');
+      setError(err?.message || 'Unexpected error');
       setLoading(false);
     }
   };

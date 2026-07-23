@@ -1,17 +1,22 @@
 import './globals.css';
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 
 export const metadata: Metadata = {
   title: 'Discipline — 30-Day Accountability Cohort',
   description: 'Strict daily discipline. Premium accountability community.',
   manifest: '/manifest.json',
-  themeColor: '#0D0D0D',
-  viewport: 'width=device-width, initial-scale=1, maximum-scale=1',
   appleWebApp: {
     capable: true,
     statusBarStyle: 'black-translucent',
     title: 'Discipline',
   },
+};
+
+export const viewport: Viewport = {
+  themeColor: '#0D0D0D',
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 1,
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
