@@ -2,7 +2,7 @@
 import { useState, useEffect, Suspense } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Bell, Shield, LogOut, Check, Smartphone, User, Edit2, Save, X, Bug, Trash2, Award, Snowflake } from 'lucide-react';
+import { Bell, Shield, LogOut, Check, Smartphone, User, Edit2, Save, X, Bug, Trash2, Award, Snowflake, Sparkles } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import Navbar from '@/components/Navbar';
 import PageHeader from '@/components/PageHeader';
@@ -456,6 +456,19 @@ function SettingsPageInner() {
               >
                 Help & FAQ
               </a>
+              <button
+                onClick={() => {
+                  // Reset onboarding + welcome state, then redirect to welcome
+                  try {
+                    localStorage.removeItem('discipline.onboardingHints.dismissed.v1');
+                  } catch { /* ignore */ }
+                  toast.success('Tour reset. Replaying welcome.');
+                  setTimeout(() => router.push('/welcome'), 600);
+                }}
+                className="h-10 px-4 rounded-lg bg-neutral-900 border border-neutral-800 text-neutral-300 font-semibold text-sm hover:border-neutral-600 inline-flex items-center gap-2 transition-colors"
+              >
+                <Sparkles className="w-3.5 h-3.5" /> Replay welcome
+              </button>
               <a
                 href="mailto:support@accountability.com"
                 className="text-xs text-amber-300 hover:text-amber-200 font-semibold underline underline-offset-4 ml-auto self-center"
