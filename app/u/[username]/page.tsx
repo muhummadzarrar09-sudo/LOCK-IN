@@ -2,10 +2,12 @@
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, Flame, Trophy, Award, Sparkles, Target, Activity } from 'lucide-react';
+import { ArrowLeft, Flame, Trophy, Award, Sparkles, Target, Share2, Check, Eye } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import Navbar from '@/components/Navbar';
 import { initials, relativeTime } from '@/lib/ui';
+import { AchievementGrid } from '@/components/AchievementBadge';
+import { useToast } from '@/components/Toast';
 
 type ProfileData = {
   id: string;
@@ -20,10 +22,13 @@ type ProfileData = {
 export default function PublicProfilePage() {
   const params = useParams();
   const router = useRouter();
+  const toast = useToast();
   const username = (params.username as string)?.toLowerCase();
   const [loading, setLoading] = useState(true);
   const [profile, setProfile] = useState<ProfileData | null>(null);
   const [notFound, setNotFound] = useState(false);
+  const [viewCount, setViewCount] = useState<number>(0);
+  const [shareCopied, setShareCopied] = useState(false);
 
   useEffect(() => {
     if (!username) return;
@@ -71,15 +76,23 @@ export default function PublicProfilePage() {
       });
       setLoading(false);
 
-      // Log profile view
+      // Log profile view (skip self-views) and refresh total count
       try {
         const { data: { session } } = await supabase.auth.getSession();
-        if (session && session.user.id !== prof.id) {
+        const isSelf = session && session.user.id === prof.id;
+        if (session && !isSelf) {
           await supabase.from('profile_views').insert({
             viewed_user_id: prof.id,
             viewer_user_id: session.user.id,
           } as any);
         }
+        // Fetch view count (RLS already limits to own, but we're counting a public profile
+        // so this is allowed for any authed user — we read aggregate via count).
+        const { count } = await supabase
+          .from('profile_views')
+          .select('*', { count: 'exact', head: true })
+          .eq('viewed_user_id', prof.id);
+        setViewCount(count || 0);
       } catch { /* non-fatal */ }
     })();
   }, [username]);
@@ -129,7 +142,7 @@ export default function PublicProfilePage() {
 
           {/* Profile header */}
           <div className="rounded-2xl border border-neutral-800 bg-gradient-to-br from-amber-950/20 to-transparent p-6 mb-6">
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-4 mb-4">
               <div className="w-16 h-16 rounded-full bg-gradient-to-br from-amber-400 to-amber-700 flex items-center justify-center text-lg font-extrabold text-black">
                 {initials(profile.username)}
               </div>
@@ -146,6 +159,33 @@ export default function PublicProfilePage() {
                   Joined {new Date(profile.created_at).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
                 </p>
               </div>
+            </div>
+            <div className="flex items-center gap-2 flex-wrap">
+              <button
+                onClick={async () => {
+                  const url = typeof window !== 'undefined' ? window.location.href : '';
+                  const nav: any = typeof navigator !== 'undefined' ? navigator : null;
+                  const text = `${profile.username} on Discipline — ${profile.streak?.current_streak || 0}-day streak.`;
+                  if (nav && typeof nav.share === 'function') {
+                    try { await nav.share({ title: `${profile.username} on Discipline`, text, url }); } catch {}
+                  } else if (nav && nav.clipboard) {
+                    await nav.clipboard.writeText(url);
+                    setShareCopied(true);
+                    toast.success('Link copied');
+                    setTimeout(() => setShareCopied(false), 2200);
+                  }
+                }}
+                className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg bg-amber-400/10 border border-amber-500/30 text-amber-300 text-xs font-bold hover:bg-amber-400/15 transition-colors"
+              >
+                {shareCopied ? <Check className="w-3.5 h-3.5" /> : <Share2 className="w-3.5 h-3.5" />}
+                {shareCopied ? 'Copied' : 'Share'}
+              </button>
+              {viewCount > 0 && (
+                <span className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg bg-neutral-900 border border-neutral-800 text-neutral-400 text-xs font-bold">
+                  <Eye className="w-3.5 h-3.5" />
+                  {viewCount} {viewCount === 1 ? 'view' : 'views'}
+                </span>
+              )}
             </div>
           </div>
 
@@ -186,37 +226,27 @@ export default function PublicProfilePage() {
           )}
 
           {/* Achievements */}
-          {profile.achievements.length > 0 && (
-            <section className="rounded-2xl border border-neutral-800 bg-[#121212]/60 p-5">
-              <div className="flex items-center gap-2 mb-3">
+          <section className="rounded-2xl border border-neutral-800 bg-[#121212]/60 p-5">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
                 <Award className="w-4 h-4 text-amber-300" />
                 <h2 className="text-xs font-extrabold text-neutral-500 uppercase tracking-[0.2em]">Achievements</h2>
               </div>
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                {profile.achievements.map((a) => (
-                  <div key={a.code} className="rounded-lg border border-amber-700/30 bg-amber-950/15 p-3 flex items-center gap-2">
-                    <div className="w-8 h-8 rounded-full bg-amber-400/15 flex items-center justify-center text-amber-300 text-xs font-extrabold shrink-0">
-                      ★
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-xs font-extrabold text-amber-100 truncate">{achievementLabel(a.code)}</p>
-                      <p className="text-[9px] text-neutral-500">{relativeTime(a.earned_at)}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </section>
-          )}
-
-          {/* Empty state if no achievements yet */}
-          {profile.achievements.length === 0 && (
-            <section className="rounded-2xl border border-dashed border-neutral-800 bg-[#121212]/30 p-5 text-center">
-              <Activity className="w-6 h-6 text-neutral-600 mx-auto mb-2" />
-              <p className="text-xs text-neutral-500">
-                {profile.username} hasn&apos;t earned any achievements yet. Check in to get the first one.
+              <span className="text-[10px] text-neutral-500 font-mono">
+                {profile.achievements.length} / 5
+              </span>
+            </div>
+            <AchievementGrid
+              codes={profile.achievements.map((a) => a.code)}
+              size="md"
+              emptyMessage={`${profile.username} hasn't earned any achievements yet.`}
+            />
+            {profile.achievements.length > 0 && (
+              <p className="text-[10px] text-neutral-500 mt-4 pt-3 border-t border-neutral-900">
+                Hover any badge to see what it took. Badges unlock automatically as streaks grow.
               </p>
-            </section>
-          )}
+            )}
+          </section>
         </div>
       </main>
     </>
@@ -236,15 +266,4 @@ function StatCard({ icon, label, value, suffix }: { icon: React.ReactNode; label
       </p>
     </div>
   );
-}
-
-function achievementLabel(code: string): string {
-  const map: Record<string, string> = {
-    streak_3: '3-day streak',
-    streak_7: 'Week of discipline',
-    streak_14: 'Fortnight',
-    streak_30: 'Cohort complete',
-    streak_100: 'Triple digits',
-  };
-  return map[code] || code.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 }

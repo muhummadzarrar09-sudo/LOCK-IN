@@ -10,7 +10,7 @@ type Item = {
   hint?: string;
   href: string;
   icon: React.ReactNode;
-  group: 'Navigate' | 'Search' | 'Members';
+  group: 'Navigate' | 'Members' | 'Reports' | 'Announcements';
   // For members: the user id (used to mark 'you' and to navigate to /u/:username)
   meta?: Record<string, any>;
 };
@@ -34,6 +34,8 @@ export function CommandPalette() {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [memberResults, setMemberResults] = useState<Item[]>([]);
+  const [reportResults, setReportResults] = useState<Item[]>([]);
+  const [communityResults, setCommunityResults] = useState<Item[]>([]);
   const [active, setActive] = useState(0);
 
   // ⌘K / Ctrl+K
@@ -55,21 +57,40 @@ export function CommandPalette() {
     if (open) { setQuery(''); setActive(0); }
   }, [open]);
 
-  // Search members when query has 2+ chars
+  // Search members, reports, and community posts when query has 2+ chars.
+  // All three fire in parallel — the cheapest wins. We debounce the whole
+  // thing to avoid hammering Supabase on every keystroke.
   useEffect(() => {
     if (!open || query.trim().length < 2) {
       setMemberResults([]);
+      setReportResults([]);
+      setCommunityResults([]);
       return;
     }
     const handle = setTimeout(async () => {
-      const q = query.toLowerCase();
-      const { data } = await supabase
-        .from('profiles')
-        .select('id, username')
-        .ilike('username', `%${q}%`)
-        .limit(8);
-      if (data) {
-        setMemberResults(data.map((m: any) => ({
+      const q = query.trim();
+      const like = `%${q}%`;
+      const [membersRes, reportsRes, communityRes] = await Promise.all([
+        supabase
+          .from('profiles')
+          .select('id, username')
+          .ilike('username', like)
+          .limit(6),
+        supabase
+          .from('reports')
+          .select('id, title, body')
+          .or(`title.ilike.${like},body.ilike.${like}`)
+          .order('created_at', { ascending: false })
+          .limit(6),
+        supabase
+          .from('community_posts')
+          .select('id, title, body')
+          .or(`title.ilike.${like},body.ilike.${like}`)
+          .order('created_at', { ascending: false })
+          .limit(6),
+      ]);
+      setMemberResults(
+        (membersRes.data || []).map((m: any) => ({
           id: `m-${m.id}`,
           label: m.username,
           hint: 'Member',
@@ -77,8 +98,30 @@ export function CommandPalette() {
           icon: <Users className="w-4 h-4" />,
           group: 'Members',
           meta: m,
-        })));
-      }
+        }))
+      );
+      setReportResults(
+        (reportsRes.data || []).map((r: any) => ({
+          id: `r-${r.id}`,
+          label: r.title,
+          hint: r.body?.slice(0, 70) || 'Report',
+          href: `/reports#${r.id}`,
+          icon: <FileText className="w-4 h-4" />,
+          group: 'Reports',
+          meta: r,
+        }))
+      );
+      setCommunityResults(
+        (communityRes.data || []).map((p: any) => ({
+          id: `c-${p.id}`,
+          label: p.title,
+          hint: p.body?.slice(0, 70) || 'Announcement',
+          href: `/community#${p.id}`,
+          icon: <MessageCircle className="w-4 h-4" />,
+          group: 'Announcements',
+          meta: p,
+        }))
+      );
     }, 200);
     return () => clearTimeout(handle);
   }, [query, open]);
@@ -89,7 +132,10 @@ export function CommandPalette() {
     return STATIC_ITEMS.filter((i) => i.label.toLowerCase().includes(q) || i.hint?.toLowerCase().includes(q));
   }, [query]);
 
-  const results = useMemo(() => [...staticResults, ...memberResults], [staticResults, memberResults]);
+  const results = useMemo(
+    () => [...staticResults, ...memberResults, ...reportResults, ...communityResults],
+    [staticResults, memberResults, reportResults, communityResults]
+  );
 
   // Keep active in bounds
   useEffect(() => {

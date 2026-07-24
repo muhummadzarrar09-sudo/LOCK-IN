@@ -2,7 +2,7 @@
 import { useState, useEffect, Suspense } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Bell, Shield, LogOut, Check, Smartphone, User, Edit2, Save, X, Bug, Trash2 } from 'lucide-react';
+import { Bell, Shield, LogOut, Check, Smartphone, User, Edit2, Save, X, Bug, Trash2, Award, Snowflake } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import Navbar from '@/components/Navbar';
 import PageHeader from '@/components/PageHeader';
@@ -10,6 +10,8 @@ import Field from '@/components/Field';
 import { useToast } from '@/components/Toast';
 import { DEFAULT_PREFS, loadPrefs, requestPermission, savePrefs, syncPrefsToServer, syncPrefsFromServer, type ReminderPrefs } from '@/lib/reminders';
 import { username as usernameRule, validateValues, hasErrors } from '@/lib/validation';
+import { AchievementGrid } from '@/components/AchievementBadge';
+import { ACHIEVEMENTS, AchievementCode } from '@/lib/achievements';
 
 export default function SettingsPage() {
   return (
@@ -37,6 +39,10 @@ function SettingsPageInner() {
   const [reportOpen, setReportOpen] = useState(false);
   const [reportText, setReportText] = useState('');
   const [sendingReport, setSendingReport] = useState(false);
+
+  // Achievements + streak freezes (used in the badges section)
+  const [earnedCodes, setEarnedCodes] = useState<AchievementCode[]>([]);
+  const [unusedFreezes, setUnusedFreezes] = useState(0);
 
   const searchParams = useSearchParams();
 
@@ -79,6 +85,15 @@ function SettingsPageInner() {
       const merged: ReminderPrefs = { ...localLoaded, ...serverPrefs, permission: typeof Notification !== 'undefined' ? Notification.permission : 'default' };
       setPrefs(merged);
       if (typeof Notification !== 'undefined') setPermission(Notification.permission);
+
+      // Load achievements + unused freezes (best-effort, non-blocking)
+      const [{ data: achData }, { count: freezeCount }] = await Promise.all([
+        supabase.from('achievements').select('code').eq('user_id', uid).order('earned_at', { ascending: false }),
+        supabase.from('streak_freezes').select('*', { count: 'exact', head: true }).eq('user_id', uid).is('used_at', null),
+      ]);
+      setEarnedCodes(((achData || []) as any[]).map((a) => a.code as AchievementCode));
+      setUnusedFreezes(freezeCount || 0);
+
       setLoading(false);
     };
     init();
@@ -275,6 +290,41 @@ function SettingsPageInner() {
                 <Row label="Timezone" value={profile?.timezone || '—'} mono />
               </div>
             )}
+          </section>
+
+          {/* Achievements section */}
+          <section className="mb-6 rounded-2xl border border-neutral-800 bg-[#121212]/60 p-6">
+            <div className="flex items-center justify-between mb-1">
+              <div className="flex items-center gap-2">
+                <Award className="w-4 h-4 text-neutral-500" />
+                <h2 className="text-xs font-extrabold text-neutral-500 uppercase tracking-[0.2em]">Achievements</h2>
+              </div>
+              <span className="text-[10px] text-neutral-500 font-mono">
+                {earnedCodes.length} / {Object.keys(ACHIEVEMENTS).length}
+              </span>
+            </div>
+            <p className="text-sm text-neutral-400 leading-relaxed mb-4">
+              Badges earned by hitting streak milestones. Hover any badge to see what it took. They&apos;re public on your profile.
+            </p>
+            {unusedFreezes > 0 && (
+              <div className="mb-4 inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-sky-950/30 border border-sky-700/30 text-sky-200 text-xs font-bold">
+                <Snowflake className="w-3.5 h-3.5 text-sky-300" />
+                {unusedFreezes} streak freeze{unusedFreezes === 1 ? '' : 's'} ready (auto-applied on missed days)
+              </div>
+            )}
+            <AchievementGrid
+              codes={earnedCodes}
+              size="md"
+              emptyMessage="No badges yet. Your first unlock happens at a 3-day streak."
+            />
+            <div className="mt-4 pt-4 border-t border-neutral-900">
+              <Link
+                href={`/u/${profile?.username || ''}`}
+                className="text-[10px] text-amber-300 hover:text-amber-200 font-bold uppercase tracking-wider"
+              >
+                View your public profile →
+              </Link>
+            </div>
           </section>
 
           {/* Reminders section */}

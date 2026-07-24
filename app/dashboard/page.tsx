@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { CheckCircle2, Circle, XCircle, Flame, Shield, LogOut, Info, X, Sparkles, Trophy, PartyPopper, Share2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
@@ -9,6 +9,9 @@ import StreakChip from '@/components/StreakChip';
 import { useCurrentTime, isWithin, toMinutes } from '@/lib/useCurrentTime';
 import { loadPrefs, requestPermission, scheduleAllBlockReminders, scheduleDailyStart, cancelAllBlockReminders } from '@/lib/reminders';
 import { OnboardingHint } from '@/components/OnboardingHint';
+import { StreakFreezeBanner } from '@/components/StreakFreezeBanner';
+import { AchievementCelebration } from '@/components/AchievementCelebration';
+import { ACHIEVEMENTS, AchievementCode, getAchievement } from '@/lib/achievements';
 
 type BlockType = 'work' | 'break' | 'movement' | 'reflection';
 
@@ -46,6 +49,10 @@ export default function DashboardPage() {
   const [userId, setUserId] = useState<string | null>(null);
   const [helpOpen, setHelpOpen] = useState(false);
   const [justCheckedId, setJustCheckedId] = useState<string | null>(null);
+  const [celebrateCode, setCelebrateCode] = useState<AchievementCode | null>(null);
+  // Snapshot of earned achievements, taken right after a check-in.
+  // Used to diff against the previous snapshot to detect NEW achievements.
+  const earnedBeforeRef = useRef<Set<string>>(new Set());
 
   const now = useCurrentTime(60_000);
 
@@ -84,6 +91,10 @@ export default function DashboardPage() {
           setStreak((streakData as any).current_streak || 0);
           setBestStreak((streakData as any).best_streak || 0);
         }
+
+        // Snapshot earned achievements — used to detect a NEW unlock on check-in
+        const { data: earned } = await supabase.from('achievements').select('code').eq('user_id', uid);
+        earnedBeforeRef.current = new Set((earned || []).map((a: any) => a.code));
 
         // Time blocks
         await loadOrCreateTimeBlocks(uid);
@@ -228,7 +239,21 @@ export default function DashboardPage() {
               setStreak((data as any).current_streak || 0);
               setBestStreak((data as any).best_streak || 0);
             }
-          }, 500);
+            // Diff achievements: detect a NEW unlock triggered by this check-in.
+            // The trigger runs on streak UPDATE so we wait briefly for it.
+            const { data: newEarned } = await supabase
+              .from('achievements')
+              .select('code')
+              .eq('user_id', userId);
+            const newCodes = (newEarned || []).map((a: any) => a.code);
+            const newlyUnlocked = newCodes.find(
+              (c: string) => !earnedBeforeRef.current.has(c) && ACHIEVEMENTS[c as AchievementCode]
+            );
+            if (newlyUnlocked) {
+              setCelebrateCode(newlyUnlocked as AchievementCode);
+              earnedBeforeRef.current.add(newlyUnlocked);
+            }
+          }, 700);
         }
       } else {
         const { error } = await supabase.from('check_ins').delete().eq('user_id', userId).eq('time_block_id', realId);
@@ -344,6 +369,9 @@ export default function DashboardPage() {
             </div>
           </div>
 
+          {/* Streak freeze banner (if user has unused freezes) */}
+          <StreakFreezeBanner />
+
           {/* Day X of 30 strip (demo mode only) */}
           {!cohortDayInfo.hidden && !cohortDayInfo.isPreCohort && !cohortDayInfo.isPostCohort && (
             <div className="mt-4 mb-6 rounded-xl border border-neutral-800 bg-[#121212]/50 p-4">
@@ -452,6 +480,12 @@ export default function DashboardPage() {
       </main>
 
       <OnboardingHint />
+
+      {/* Achievement celebration — shown when a new badge is unlocked */}
+      <AchievementCelebration
+        code={celebrateCode}
+        onClose={() => setCelebrateCode(null)}
+      />
 
       {/* Help modal — replaces the static "Evidence-Based Structure" panel */}
       {helpOpen && (

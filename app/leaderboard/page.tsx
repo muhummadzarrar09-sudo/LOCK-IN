@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState, useMemo, useCallback } from 'react';
 import Link from 'next/link';
-import { Trophy, Crown, Medal, Award, Search } from 'lucide-react';
+import { Trophy, Crown, Medal, Award, Search, Activity } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import Navbar from '@/components/Navbar';
 import PageHeader from '@/components/PageHeader';
@@ -38,6 +38,8 @@ export default function LeaderboardPage() {
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [query, setQuery] = useState('');
   const [cohortAvg, setCohortAvg] = useState(0);
+  const [activeToday, setActiveToday] = useState<number | null>(null);
+  const [totalMembers, setTotalMembers] = useState<number | null>(null);
 
   const fetcher = useCallback(async (page: number, pageSize: number) => {
     const from = page * pageSize;
@@ -59,6 +61,17 @@ export default function LeaderboardPage() {
       const total = (allStreaks || []).reduce((s, x: any) => s + (x.current_streak || 0), 0);
       const denom = count || (allStreaks?.length || 1);
       setCohortAvg(Math.round((total / denom) * 10) / 10);
+      setTotalMembers(count || null);
+
+      // Active today = unique users with check_ins today
+      const todayISO = new Date().toISOString().slice(0, 10);
+      const { data: todayCheckIns } = await supabase
+        .from('check_ins')
+        .select('user_id')
+        .gte('completed_at', `${todayISO}T00:00:00Z`);
+      if (todayCheckIns) {
+        setActiveToday(new Set((todayCheckIns as any[]).map(c => c.user_id)).size);
+      }
     }
 
     return { rows: (data || []) as LeaderEntry[], hasMore: (data || []).length === pageSize };
@@ -93,6 +106,17 @@ export default function LeaderboardPage() {
             title="Leaderboard"
             subtitle={`Ranked by streak · Cohort average: ${cohortAvg} day${cohortAvg === 1 ? '' : 's'}`}
           />
+
+          {activeToday !== null && totalMembers !== null && totalMembers > 0 && (
+            <div className="mb-5 inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-950/20 border border-emerald-800/30 text-emerald-200 text-[10px] font-extrabold uppercase tracking-wider">
+              <span className="relative flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-400" />
+              </span>
+              <Activity className="w-3 h-3" />
+              {activeToday} of {totalMembers} active today
+            </div>
+          )}
 
           {myEntry && (
             <div className="mb-6 rounded-2xl border border-amber-500/40 bg-gradient-to-br from-amber-500/10 to-amber-700/5 p-5">
