@@ -8,10 +8,11 @@ import PageHeader from '@/components/PageHeader';
 import { useToast } from '@/components/Toast';
 import ConfirmDialog from '@/components/ConfirmDialog';
 import { AnalyticsTab } from '@/components/admin/AnalyticsTab';
+import { DemoSeedTab } from '@/components/admin/DemoSeedTab';
 
 type Profile = { id: string; username: string; email: string; role: string; created_at?: string };
 
-type Tab = 'daily' | 'weekly' | 'setup' | 'support' | 'analytics';
+type Tab = 'daily' | 'weekly' | 'setup' | 'support' | 'analytics' | 'demo';
 
 export default function AdminPage() {
   const router = useRouter();
@@ -375,6 +376,7 @@ export default function AdminPage() {
                   { id: 'setup', label: 'Setup' },
                   { id: 'analytics', label: 'Analytics' },
                   { id: 'support', label: 'Support' },
+                  { id: 'demo', label: 'Demo seed' },
                 ] as { id: Tab; label: string }[]).map(({ id: t, label }) => (
                   <button
                     key={t}
@@ -574,6 +576,12 @@ export default function AdminPage() {
                       </div>
                     )}
                   </SectionCard>
+                </div>
+              )}
+
+              {tab === 'demo' && (
+                <div className="space-y-6">
+                  <DemoSeedTab onSeeded={loadMetrics} />
                 </div>
               )}
             </>
