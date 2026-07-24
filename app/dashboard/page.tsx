@@ -18,7 +18,6 @@ import { CohortComparison } from '@/components/CohortComparison';
 import { ShareCardModal } from '@/components/ShareCardModal';
 import { WeekProgressRing } from '@/components/WeekProgressRing';
 import { BestTimeInsight } from '@/components/BestTimeInsight';
-import { BestDayInsight } from '@/components/BestDayInsight';
 import { useToast } from '@/components/Toast';
 import { ACHIEVEMENTS, AchievementCode, getAchievement } from '@/lib/achievements';
 
@@ -411,7 +410,6 @@ export default function DashboardPage() {
               )}
               <div className="mt-1.5 flex flex-wrap gap-1.5">
                 <BestTimeInsight userId={userId || ''} />
-                <BestDayInsight userId={userId || ''} />
               </div>
             </div>
             <div className="flex items-center gap-2 shrink-0">
