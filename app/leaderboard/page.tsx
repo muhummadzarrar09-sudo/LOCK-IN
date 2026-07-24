@@ -1,11 +1,12 @@
 "use client";
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useCallback } from 'react';
 import { Trophy, Crown, Medal, Award, Search } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import Navbar from '@/components/Navbar';
 import PageHeader from '@/components/PageHeader';
 import EmptyState from '@/components/EmptyState';
 import { SkeletonList } from '@/components/Skeleton';
+import { useRealtimeTable } from '@/lib/realtime';
 
 type LeaderEntry = {
   id: string;
@@ -35,37 +36,41 @@ export default function LeaderboardPage() {
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [query, setQuery] = useState('');
 
-  useEffect(() => {
-    const load = async () => {
-      try {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (session) setCurrentUserId(session.user.id);
+  const load = useCallback(async () => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) setCurrentUserId(session.user.id);
 
-        const { data: viewData, error: viewError } = await supabase.from('leaderboard').select('*').order('rank', { ascending: true }).limit(50);
-        if (!viewError && viewData && viewData.length > 0) {
-          setEntries(viewData as any);
-        } else {
-          const { data: profiles } = await supabase.from('profiles').select('id,username,role').eq('role','member');
-          const { data: streaks } = await supabase.from('streaks').select('user_id,current_streak');
-          const streakMap = new Map((streaks||[]).map((s:any) => [s.user_id, s.current_streak]));
-          const combined = (profiles||[]).map((p:any) => ({
-            id: p.id,
-            username: p.username,
-            streak: streakMap.get(p.id) || 0,
-            role: p.role,
-            rank: 0,
-          })).sort((a,b) => b.streak - a.streak || a.username.localeCompare(b.username))
-            .map((e,i) => ({ ...e, rank: i+1 }));
-          setEntries(combined);
-        }
-      } catch (e) {
-        console.warn('leaderboard load', e);
-      } finally {
-        setLoading(false);
+      const { data: viewData, error: viewError } = await supabase.from('leaderboard').select('*').order('rank', { ascending: true }).limit(50);
+      if (!viewError && viewData && viewData.length > 0) {
+        setEntries(viewData as any);
+      } else {
+        const { data: profiles } = await supabase.from('profiles').select('id,username,role').eq('role','member');
+        const { data: streaks } = await supabase.from('streaks').select('user_id,current_streak');
+        const streakMap = new Map((streaks||[]).map((s:any) => [s.user_id, s.current_streak]));
+        const combined = (profiles||[]).map((p:any) => ({
+          id: p.id,
+          username: p.username,
+          streak: streakMap.get(p.id) || 0,
+          role: p.role,
+          rank: 0,
+        })).sort((a,b) => b.streak - a.streak || a.username.localeCompare(b.username))
+          .map((e,i) => ({ ...e, rank: i+1 }));
+        setEntries(combined);
       }
-    };
-    load();
+    } catch (e) {
+      console.warn('leaderboard load', e);
+    } finally {
+      setLoading(false);
+    }
   }, []);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  // Real-time: refresh when any streak updates
+  useRealtimeTable('streaks', '*', () => { load(); }, undefined, [load]);
 
   const myEntry = currentUserId ? entries.find(e => e.id === currentUserId) : null;
 

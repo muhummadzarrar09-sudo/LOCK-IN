@@ -1,11 +1,12 @@
 "use client";
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useCallback } from 'react';
 import { Users, Clock, MessageSquare } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import Navbar from '@/components/Navbar';
 import PageHeader from '@/components/PageHeader';
 import EmptyState from '@/components/EmptyState';
 import { SkeletonList } from '@/components/Skeleton';
+import { useRealtimeTable } from '@/lib/realtime';
 
 type Team = {
   id: string;
@@ -126,24 +127,31 @@ export default function TeamPage() {
     } as any);
     if (!error) {
       setPostText('');
-      // Reload logs
-      const { data: logsData } = await supabase
-        .from('team_startup_log')
-        .select('id,team_id,user_id,note,created_at')
-        .in('team_id', myTeams)
-        .order('created_at', { ascending: false })
-        .limit(30);
-      if (logsData) {
-        const logUserIds = [...new Set((logsData as any[]).map((l) => l.user_id))];
-        const { data: logProfiles } = await supabase.from('profiles').select('id,username').in('id', logUserIds);
-        const logProfileMap = new Map((logProfiles || []).map((p: any) => [p.id, p]));
-        setLogs((logsData as any[]).map((l) => ({ ...l, profiles: logProfileMap.get(l.user_id) })));
-      }
+      // Real-time subscription will refresh; no manual reload needed.
     } else {
       console.warn('team log post:', error.message);
     }
     setPosting(false);
   };
+
+  // Real-time: refresh team feed when teammates post
+  const refreshLogs = useCallback(async () => {
+    if (myTeams.length === 0) return;
+    const { data: logsData } = await supabase
+      .from('team_startup_log')
+      .select('id,team_id,user_id,note,created_at')
+      .in('team_id', myTeams)
+      .order('created_at', { ascending: false })
+      .limit(30);
+    if (logsData) {
+      const logUserIds = [...new Set((logsData as any[]).map((l) => l.user_id))];
+      const { data: logProfiles } = await supabase.from('profiles').select('id,username').in('id', logUserIds);
+      const logProfileMap = new Map((logProfiles || []).map((p: any) => [p.id, p]));
+      setLogs((logsData as any[]).map((l) => ({ ...l, profiles: logProfileMap.get(l.user_id) })));
+    }
+  }, [myTeams]);
+
+  useRealtimeTable('team_startup_log', 'INSERT', refreshLogs, undefined, [refreshLogs]);
 
   return (
     <>

@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Settings, Save, LogOut, Users, FileText, MessageCircle, Plus, Shield, TrendingUp, Activity, BookOpen, Eye, EyeOff } from 'lucide-react';
+import { Settings, Save, LogOut, Users, FileText, MessageCircle, Plus, Shield, TrendingUp, Activity, BookOpen, Eye, EyeOff, Bug, Clock } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import Navbar from '@/components/Navbar';
 import PageHeader from '@/components/PageHeader';
@@ -10,7 +10,7 @@ import ConfirmDialog from '@/components/ConfirmDialog';
 
 type Profile = { id: string; username: string; email: string; role: string; created_at?: string };
 
-type Tab = 'daily' | 'weekly' | 'setup';
+type Tab = 'daily' | 'weekly' | 'setup' | 'support';
 
 export default function AdminPage() {
   const router = useRouter();
@@ -39,6 +39,9 @@ export default function AdminPage() {
     message: '',
     onConfirm: () => {},
   });
+
+  const [bugReports, setBugReports] = useState<any[]>([]);
+  const [bugReportsLoading, setBugReportsLoading] = useState(false);
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -69,6 +72,7 @@ export default function AdminPage() {
       loadCohort();
       loadProfiles();
       loadMetrics();
+      loadBugReports();
     }
   }, [authLoading, role]);
 
@@ -222,6 +226,23 @@ export default function AdminPage() {
     setTeamForm({ name: '', startup_title: '', startup_pitch: '' });
   };
 
+  const loadBugReports = async () => {
+    setBugReportsLoading(true);
+    const { data } = await supabase.from('bug_reports').select('*').order('created_at', { ascending: false }).limit(50);
+    if (data) setBugReports(data as any);
+    setBugReportsLoading(false);
+  };
+
+  const updateBugReport = async (id: string, patch: any) => {
+    const { error } = await supabase.from('bug_reports').update(patch as any).eq('id', id);
+    if (error) {
+      toast.error('Could not update report.');
+    } else {
+      toast.success('Report updated');
+      loadBugReports();
+    }
+  };
+
   const handleSignOut = async () => {
     await supabase.auth.signOut();
     window.location.href = '/auth/login';
@@ -288,7 +309,7 @@ export default function AdminPage() {
 
               {/* Tabs */}
               <div className="flex items-center gap-1 mb-5 border-b border-neutral-900">
-                {(['daily', 'weekly', 'setup'] as Tab[]).map((t) => (
+                {(['daily', 'weekly', 'setup', 'support'] as Tab[]).map((t) => (
                   <button
                     key={t}
                     onClick={() => setTab(t)}
@@ -418,6 +439,68 @@ export default function AdminPage() {
                     <p className="text-[11px] text-neutral-500 mt-3">
                       After creating a team, you can add members from the Members tab. Teams are auto-assigned to the current cohort.
                     </p>
+                  </SectionCard>
+                </div>
+              )}
+
+              {tab === 'support' && (
+                <div className="space-y-6">
+                  <SectionCard title="Bug Reports" icon={Bug}>
+                    {bugReportsLoading ? (
+                      <div className="text-xs text-neutral-500 animate-pulse">Loading reports…</div>
+                    ) : bugReports.length === 0 ? (
+                      <p className="text-xs text-neutral-500 text-center py-4">No reports yet. Inbox zero!</p>
+                    ) : (
+                      <div className="space-y-2 max-h-[600px] overflow-auto pr-1">
+                        {bugReports.map((r: any) => {
+                          const status = r.status || 'open';
+                          const statusColor = (
+                            {
+                              open: 'bg-amber-500/20 text-amber-200 border-amber-500/30',
+                              triaged: 'bg-violet-500/20 text-violet-200 border-violet-500/30',
+                              resolved: 'bg-emerald-500/20 text-emerald-200 border-emerald-500/30',
+                              closed: 'bg-neutral-700/30 text-neutral-400 border-neutral-700/30',
+                            } as Record<string, string>
+                          )[status] || 'bg-neutral-700/30 text-neutral-300 border-neutral-700/30';
+                          return (
+                            <div key={r.id} className="rounded-lg border border-neutral-800 bg-neutral-900/50 p-3.5">
+                              <div className="flex items-start justify-between gap-2 mb-2">
+                                <div className="flex items-center gap-2 min-w-0 flex-1">
+                                  <span className={`text-[9px] font-extrabold tracking-wider uppercase px-1.5 py-0.5 rounded border ${statusColor}`}>
+                                    {status}
+                                  </span>
+                                  <span className="text-xs text-neutral-300 font-mono truncate">{r.user_email || 'anonymous'}</span>
+                                </div>
+                                <span className="text-[10px] text-neutral-600 font-mono shrink-0 inline-flex items-center gap-1">
+                                  <Clock className="w-2.5 h-2.5" />
+                                  {new Date(r.created_at).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
+                                </span>
+                              </div>
+                              <p className="text-xs text-neutral-200 leading-relaxed mb-2 whitespace-pre-wrap">{r.body}</p>
+                              {r.url && (
+                                <p className="text-[10px] text-neutral-600 font-mono truncate mb-2">URL: {r.url}</p>
+                              )}
+                              <div className="flex flex-wrap items-center gap-1.5 pt-2 border-t border-neutral-800">
+                                {(['open', 'triaged', 'resolved', 'closed'] as const).map((s) => (
+                                  <button
+                                    key={s}
+                                    onClick={() => updateBugReport(r.id, { status: s, ...(s === 'resolved' ? { resolved_at: new Date().toISOString() } : {}) })}
+                                    disabled={status === s}
+                                    className={`h-6 px-2 rounded text-[10px] font-bold uppercase tracking-wider transition-colors ${
+                                      status === s
+                                        ? 'bg-neutral-800 text-neutral-500 cursor-not-allowed'
+                                        : 'bg-neutral-900 border border-neutral-800 text-neutral-400 hover:border-neutral-600 hover:text-neutral-200'
+                                    }`}
+                                  >
+                                    {s}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
                   </SectionCard>
                 </div>
               )}

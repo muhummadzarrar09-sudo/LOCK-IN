@@ -144,20 +144,30 @@ function SettingsPageInner() {
       return;
     }
     setSendingReport(true);
-    // Compose a mailto: with subject + body. Real-world: wire to a support inbox or service.
-    const subject = encodeURIComponent(`Discipline — Bug report from ${userEmail || 'member'}`);
-    const body = encodeURIComponent(
-      `${reportText}\n\n---\nUser: ${userEmail}\nUser ID: ${userId}\nURL: ${typeof window !== 'undefined' ? window.location.href : ''}\nUser agent: ${typeof navigator !== 'undefined' ? navigator.userAgent : ''}\nTime: ${new Date().toISOString()}`
-    );
     try {
+      const { error } = await supabase.from('bug_reports').insert({
+        user_id: userId,
+        user_email: userEmail,
+        body: reportText.trim(),
+        url: typeof window !== 'undefined' ? window.location.href : null,
+        user_agent: typeof navigator !== 'undefined' ? navigator.userAgent : null,
+      } as any);
+      if (error) throw error;
+      toast.success('Report sent. Thank you.');
+      setReportOpen(false);
+      setReportText('');
+    } catch (err: any) {
+      // Fall back to mailto: if Supabase insert fails
+      const subject = encodeURIComponent(`Discipline — Bug report from ${userEmail || 'member'}`);
+      const body = encodeURIComponent(
+        `${reportText}\n\n---\nUser: ${userEmail}\nURL: ${typeof window !== 'undefined' ? window.location.href : ''}\nUser agent: ${typeof navigator !== 'undefined' ? navigator.userAgent : ''}\nTime: ${new Date().toISOString()}`
+      );
       window.location.href = `mailto:support@accountability.com?subject=${subject}&body=${body}`;
-      toast.success('Opening your email app…');
+      toast.info('Sent via email as fallback.');
       setTimeout(() => {
         setReportOpen(false);
         setReportText('');
       }, 500);
-    } catch {
-      toast.error('Could not open email. Please email support@accountability.com directly.');
     } finally {
       setSendingReport(false);
     }
