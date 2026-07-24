@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useState, useMemo, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { Search, ArrowRight, Home, Trophy, Users, FileText, MessageCircle, LifeBuoy, Settings, Sliders, LogIn, UserPlus, X, Sparkles } from 'lucide-react';
+import { Search, ArrowRight, Home, Trophy, Users, FileText, MessageCircle, LifeBuoy, Settings, Sliders, LogIn, UserPlus, X, Sparkles, Calendar } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 
 type Item = {
@@ -17,7 +17,8 @@ type Item = {
 
 const STATIC_ITEMS: Item[] = [
   { id: 'home', label: 'Home', hint: 'Landing page', href: '/', icon: <Home className="w-4 h-4" />, group: 'Navigate' },
-  { id: 'dash', label: 'Dashboard', hint: 'Today\'s time blocks', href: '/dashboard', icon: <Home className="w-4 h-4" />, group: 'Navigate' },
+  { id: 'dash', label: 'Dashboard', hint: "Today's time blocks", href: '/dashboard', icon: <Home className="w-4 h-4" />, group: 'Navigate' },
+  { id: 'history', label: 'History', hint: '30-day execution log', href: '/history', icon: <Calendar className="w-4 h-4" />, group: 'Navigate' },
   { id: 'leader', label: 'Leaderboard', hint: 'Cohort rankings', href: '/leaderboard', icon: <Trophy className="w-4 h-4" />, group: 'Navigate' },
   { id: 'people', label: 'Members', hint: 'Browse all members', href: '/people', icon: <Users className="w-4 h-4" />, group: 'Navigate' },
   { id: 'team', label: 'Team', hint: 'Your squad', href: '/team', icon: <Users className="w-4 h-4" />, group: 'Navigate' },

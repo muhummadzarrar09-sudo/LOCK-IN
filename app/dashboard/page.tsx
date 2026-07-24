@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { CheckCircle2, Circle, XCircle, Flame, Shield, LogOut, Info, X, Sparkles, Trophy, PartyPopper, Share2 } from 'lucide-react';
+import { CheckCircle2, Circle, XCircle, Flame, Shield, LogOut, Info, X, Sparkles, Trophy, PartyPopper, Share2, Calendar } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import Navbar from '@/components/Navbar';
 import PageHeader from '@/components/PageHeader';
@@ -377,6 +377,14 @@ export default function DashboardPage() {
             </div>
             <div className="flex items-center gap-2 shrink-0">
               <div data-onboarding="streak"><StreakChip streak={streak} best={bestStreak} showBest={bestStreak > 0} /></div>
+              <a
+                href="/history"
+                className="hidden sm:inline-flex h-9 px-2.5 items-center gap-1.5 rounded-lg bg-neutral-900 border border-neutral-800 text-[11px] font-bold text-neutral-400 hover:text-amber-300 hover:border-amber-500/30 transition-colors"
+                title="30-day history"
+              >
+                <Calendar className="w-3.5 h-3.5" />
+                History
+              </a>
               <button
                 onClick={handleSignOut}
                 className="w-9 h-9 rounded-lg bg-neutral-900 border border-neutral-800 flex items-center justify-center hover:border-neutral-600 transition-colors"
