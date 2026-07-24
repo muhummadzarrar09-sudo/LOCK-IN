@@ -1,8 +1,14 @@
 "use client";
-import { useEffect, useState } from 'react';
-import { Users, Plus } from 'lucide-react';
+import { useEffect, useState, useMemo, useCallback } from 'react';
+import { Users, Clock, MessageSquare } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import Navbar from '@/components/Navbar';
+import PageHeader from '@/components/PageHeader';
+import EmptyState from '@/components/EmptyState';
+import { SkeletonList } from '@/components/Skeleton';
+import { useRealtimeEvent } from '@/components/CohortRealtime';
+import { TeamPulseStats } from '@/components/TeamPulseStats';
+import { FreshnessDot } from '@/components/FreshnessDot';
 
 type Team = {
   id: string;
@@ -18,12 +24,49 @@ type TeamMember = {
   profiles?: { username: string; email: string };
 };
 
+type LogEntry = {
+  id: string;
+  team_id: string;
+  user_id: string;
+  note: string;
+  created_at: string;
+  profiles?: { username: string };
+};
+
+const STAGE_COPY: Record<string, { label: string; color: string }> = {
+  idea: { label: 'Idea', color: 'bg-neutral-800 text-neutral-300' },
+  prototype: { label: 'Prototype', color: 'bg-amber-900/30 text-amber-200 border border-amber-800/30' },
+  revenue: { label: 'Revenue', color: 'bg-emerald-900/30 text-emerald-200 border border-emerald-800/30' },
+};
+
+function timeAgo(iso: string): string {
+  const ms = Date.now() - new Date(iso).getTime();
+  const min = Math.floor(ms / 60000);
+  if (min < 1) return 'just now';
+  if (min < 60) return `${min}m ago`;
+  const hr = Math.floor(min / 60);
+  if (hr < 24) return `${hr}h ago`;
+  const d = Math.floor(hr / 24);
+  if (d < 7) return `${d}d ago`;
+  return new Date(iso).toLocaleDateString();
+}
+
+function initials(name: string): string {
+  if (!name) return '?';
+  const parts = name.replace(/[^a-zA-Z0-9 ]/g, '').trim().split(/\s+/);
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[1][0]).toUpperCase();
+}
+
 export default function TeamPage() {
   const [teams, setTeams] = useState<Team[]>([]);
   const [myTeams, setMyTeams] = useState<string[]>([]);
   const [members, setMembers] = useState<TeamMember[]>([]);
+  const [logs, setLogs] = useState<LogEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [userId, setUserId] = useState<string | null>(null);
+  const [postText, setPostText] = useState('');
+  const [posting, setPosting] = useState(false);
 
   useEffect(() => {
     const load = async () => {
@@ -32,27 +75,46 @@ export default function TeamPage() {
         if (!session) return;
         setUserId(session.user.id);
 
-        // My team memberships
-        const { data: myMemberships } = await supabase.from('team_members').select('team_id').eq('user_id', session.user.id);
-        const myTeamIds = (myMemberships||[]).map((m:any) => m.team_id);
+        // Parallel: my memberships + all teams (they don't depend on each other)
+        const [myMembershipsRes, teamsRes] = await Promise.all([
+          supabase.from('team_members').select('team_id').eq('user_id', session.user.id),
+          supabase.from('teams').select('*').order('created_at', { ascending: false }),
+        ]);
+        const myTeamIds = (myMembershipsRes.data || []).map((m: any) => m.team_id);
         setMyTeams(myTeamIds);
+        setTeams((teamsRes.data as any) || []);
 
-        // All teams
-        const { data: teamsData } = await supabase.from('teams').select('*').order('created_at', { ascending: false });
-        setTeams((teamsData as any) || []);
-
-        // Members for my teams (or all if you want) - try fetch with join
         if (myTeamIds.length > 0) {
-          const { data: membersData } = await supabase.from('team_members').select('team_id,user_id').in('team_id', myTeamIds);
-          // Try to get usernames via profiles
-          const userIds = [...new Set((membersData||[]).map((m:any) => m.user_id))];
-          const { data: profiles } = await supabase.from('profiles').select('id,username,email').in('id', userIds);
-          const profileMap = new Map((profiles||[]).map((p:any) => [p.id, p]));
-          const enriched = (membersData||[]).map((m:any) => ({
-            ...m,
-            profiles: profileMap.get(m.user_id)
-          }));
-          setMembers(enriched);
+          // Parallel: members of my teams + the team feed logs
+          const [membersRes, logsRes] = await Promise.all([
+            supabase.from('team_members').select('team_id,user_id').in('team_id', myTeamIds),
+            supabase
+              .from('team_startup_log')
+              .select('id,team_id,user_id,note,created_at')
+              .in('team_id', myTeamIds)
+              .order('created_at', { ascending: false })
+              .limit(30),
+          ]);
+          const membersData = membersRes.data;
+          const logsData = logsRes.data;
+
+          const userIds = [...new Set((membersData || []).map((m: any) => m.user_id))];
+          const logUserIds = [...new Set((logsData || []).map((l: any) => l.user_id))];
+          // Combined: dedupe + fetch all profiles in one round-trip
+          const allUserIds = [...new Set([...userIds, ...logUserIds])];
+          if (allUserIds.length > 0) {
+            const { data: profiles } = await supabase
+              .from('profiles')
+              .select('id,username,email')
+              .in('id', allUserIds);
+            const profileMap = new Map((profiles || []).map((p: any) => [p.id, p]));
+            const enriched = (membersData || []).map((m: any) => ({ ...m, profiles: profileMap.get(m.user_id) }));
+            setMembers(enriched);
+            setLogs((logsData || []).map((l: any) => ({ ...l, profiles: profileMap.get(l.user_id) })));
+          } else {
+            setMembers([]);
+            setLogs([]);
+          }
         }
       } catch (e) {
         console.warn('team load', e);
@@ -63,69 +125,247 @@ export default function TeamPage() {
     load();
   }, []);
 
+  const myTeamObjects = useMemo(() => teams.filter(t => myTeams.includes(t.id)), [teams, myTeams]);
+  const otherTeams = useMemo(() => teams.filter(t => !myTeams.includes(t.id)), [teams, myTeams]);
+
+  const handlePost = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!postText.trim() || !userId || myTeams.length === 0) return;
+    setPosting(true);
+    // Post to the first team the user is a member of
+    const teamId = myTeams[0];
+    const { error } = await supabase.from('team_startup_log').insert({
+      team_id: teamId,
+      user_id: userId,
+      note: postText.trim(),
+    } as any);
+    if (!error) {
+      setPostText('');
+      // Real-time subscription will refresh; no manual reload needed.
+    } else {
+      console.warn('team log post:', error.message);
+    }
+    setPosting(false);
+  };
+
+  // Real-time: refresh team feed when teammates post
+  const refreshLogs = useCallback(async () => {
+    if (myTeams.length === 0) return;
+    const { data: logsData } = await supabase
+      .from('team_startup_log')
+      .select('id,team_id,user_id,note,created_at')
+      .in('team_id', myTeams)
+      .order('created_at', { ascending: false })
+      .limit(30);
+    if (logsData) {
+      const logUserIds = [...new Set((logsData as any[]).map((l) => l.user_id))];
+      const { data: logProfiles } = await supabase.from('profiles').select('id,username').in('id', logUserIds);
+      const logProfileMap = new Map((logProfiles || []).map((p: any) => [p.id, p]));
+      setLogs((logsData as any[]).map((l) => ({ ...l, profiles: logProfileMap.get(l.user_id) })));
+    }
+  }, [myTeams]);
+
+  // Real-time: refresh team feed when teammates post. Subscribes via the
+  // single shared channel (CohortRealtimeProvider) — no local channel
+  // setup here.
+  useRealtimeEvent('team', () => refreshLogs(), myTeams.length > 0);
+
   return (
     <>
       <Navbar />
-      <main className="min-h-screen bg-[#0D0D0D] px-6 pt-12 pb-20 text-white">
+      <main id="main-content" className="min-h-screen bg-[#0D0D0D] px-5 md:px-6 pt-8 md:pt-12 pb-24 text-white">
         <div className="max-w-3xl mx-auto">
-          <div className="flex items-center gap-3 mb-8">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-400 to-amber-600 flex items-center justify-center">
-              <Users className="w-5 h-5 text-black" />
-            </div>
-            <div>
-              <h1 className="text-2xl font-extrabold tracking-tighter">Team</h1>
-              <p className="text-[10px] text-neutral-500">Your accountability squads · Live</p>
-            </div>
-          </div>
+          <PageHeader
+            icon={Users}
+            title="Team"
+            subtitle="Your accountability squad · Ships together"
+          />
 
           {loading ? (
-            <div className="text-sm text-neutral-500 animate-pulse">Loading teams...</div>
-          ) : teams.length === 0 ? (
-            <div className="rounded-2xl border border-neutral-800 bg-[#121212]/60 p-8 text-center">
-              <h3 className="text-sm font-bold mb-2">No teams yet</h3>
-              <p className="text-xs text-neutral-500 mb-4">Teams are created by admin or via invites. Your admin can create teams in Supabase `teams` table.</p>
-              <p className="text-[11px] text-neutral-600">To create: INSERT INTO teams(name,startup_title) VALUES('Alpha','Project Zenith')</p>
-            </div>
+            <SkeletonList rows={3} />
+          ) : myTeams.length === 0 && teams.length === 0 ? (
+            <EmptyState
+              icon={Users}
+              title="Your team is being assigned"
+              description="Your cohort lead will assign you to a squad of 3–4 before Day 1. You'll get a notification when your team is set."
+              primaryAction={{ label: 'Go to dashboard', href: '/dashboard' }}
+            />
+          ) : myTeams.length === 0 ? (
+            <NotOnTeamState otherCount={teams.length} />
           ) : (
-            <div className="grid md:grid-cols-2 gap-6">
-              {teams.map((team) => {
+            <>
+              {/* Your team(s) */}
+              {myTeamObjects.map((team) => {
                 const teamMembers = members.filter(m => m.team_id === team.id);
-                const isMyTeam = myTeams.includes(team.id);
                 return (
-                  <div key={team.id} className={`rounded-2xl border p-6 ${isMyTeam ? 'border-amber-800/40 bg-amber-950/10' : 'border-neutral-800 bg-[#121212]/60'}`}>
-                    <div className="flex items-start justify-between mb-3">
-                      <h2 className="text-lg font-extrabold">{team.name}</h2>
-                      {isMyTeam && <span className="text-[9px] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 font-bold">MY TEAM</span>}
+                  <section key={team.id} className="mb-10">
+                    <div className="rounded-2xl border border-amber-700/40 bg-gradient-to-br from-amber-950/30 to-amber-900/10 p-6 md:p-8 mb-6">
+                      <div className="flex items-start justify-between gap-3 mb-4">
+                        <div className="min-w-0">
+                          <p className="text-[10px] uppercase tracking-[0.2em] text-amber-300/80 font-bold mb-1">Your Team</p>
+                          <h2 className="text-2xl md:text-3xl font-extrabold tracking-tighter text-white">{team.name}</h2>
+                        </div>
+                        <span className={`shrink-0 inline-flex px-2.5 py-1 rounded-md text-[10px] font-extrabold tracking-wider ${STAGE_COPY[team.startup_stage || 'idea']?.color || STAGE_COPY.idea.color}`}>
+                          {STAGE_COPY[team.startup_stage || 'idea']?.label || 'Idea'}
+                        </span>
+                      </div>
+                      {team.startup_title && (
+                        <p className="text-base text-amber-100 font-semibold mb-1">Building: {team.startup_title}</p>
+                      )}
+                      {team.startup_pitch && (
+                        <p className="text-sm text-neutral-400 leading-relaxed mb-4">{team.startup_pitch}</p>
+                      )}
+                      <div className="border-t border-amber-800/20 pt-4">
+                        <p className="text-[10px] uppercase tracking-[0.2em] text-neutral-500 font-bold mb-3">
+                          Squad ({teamMembers.length} {teamMembers.length === 1 ? 'member' : 'members'})
+                        </p>
+                        {teamMembers.length === 0 ? (
+                          <p className="text-xs text-neutral-500">Members will appear here once your team is fully loaded.</p>
+                        ) : (
+                          <div className="flex flex-wrap gap-2">
+                            {teamMembers.map((m) => {
+                              const name = m.profiles?.username || m.user_id.slice(0, 6);
+                              return (
+                                <div
+                                  key={m.user_id}
+                                  className={`inline-flex items-center gap-2 pl-1 pr-3 py-1 rounded-full border ${
+                                    m.user_id === userId
+                                      ? 'bg-amber-500/15 border-amber-500/30'
+                                      : 'bg-neutral-900/50 border-neutral-800'
+                                  }`}
+                                >
+                                  <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-extrabold ${
+                                    m.user_id === userId ? 'bg-amber-400 text-black' : 'bg-neutral-800 text-neutral-300'
+                                  }`}>
+                                    {initials(name)}
+                                  </div>
+                                  <span className={`text-xs font-semibold ${m.user_id === userId ? 'text-amber-100' : 'text-neutral-300'}`}>
+                                    {name}{m.user_id === userId && <span className="text-amber-400 ml-1">(you)</span>}
+                                  </span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
                     </div>
-                    <h3 className="text-sm font-bold text-neutral-300 mb-1">{team.startup_title || 'Untitled Startup'}</h3>
-                    <p className="text-xs text-neutral-500 mb-3">{team.startup_pitch || 'No pitch yet.'}</p>
-                    <div className="inline-flex px-2.5 py-1 rounded-md bg-amber-900/20 text-amber-300 text-[10px] font-extrabold tracking-wide mb-4">STAGE: {(team.startup_stage || 'idea').toUpperCase()}</div>
-                    <div className="border-t border-neutral-800 pt-3">
-                      <h4 className="text-[10px] font-bold text-neutral-500 uppercase tracking-wider mb-2">Members ({teamMembers.length})</h4>
-                      {teamMembers.length === 0 ? (
-                        <p className="text-xs text-neutral-600">No members loaded (RLS may restrict). Run fix-rls-team SQL.</p>
+
+                    {/* Team pulse: collective stats */}
+                    <TeamPulseStats
+                      teamId={team.id}
+                      memberUserIds={teamMembers.map((m) => m.user_id)}
+                    />
+
+                    {/* Team feed */}
+                    <div className="mb-6">
+                      <div className="flex items-center justify-between mb-3">
+                        <h3 className="text-[10px] font-extrabold text-neutral-500 uppercase tracking-[0.2em] flex items-center gap-2">
+                          <MessageSquare className="w-3 h-3" /> Team Feed
+                        </h3>
+                        <span className="text-[10px] text-neutral-500">{logs.length} updates</span>
+                      </div>
+
+                      {/* Post input */}
+                      <form onSubmit={handlePost} className="mb-5 rounded-xl border border-neutral-800 bg-[#121212]/60 p-3">
+                        <textarea
+                          value={postText}
+                          onChange={(e) => setPostText(e.target.value)}
+                          placeholder="What did you ship today?"
+                          rows={2}
+                          className="w-full bg-transparent text-sm text-white placeholder-neutral-600 focus:outline-none resize-none"
+                        />
+                        <div className="flex items-center justify-between pt-2 border-t border-neutral-800">
+                          <span className="text-[10px] text-neutral-500">Visible to your team</span>
+                          <button
+                            type="submit"
+                            disabled={!postText.trim() || posting}
+                            className="h-8 px-3 rounded-md bg-amber-400 text-black text-xs font-extrabold hover:bg-amber-300 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                          >
+                            {posting ? 'Posting…' : 'Post Update'}
+                          </button>
+                        </div>
+                      </form>
+
+                      {logs.length === 0 ? (
+                        <div className="rounded-xl border border-dashed border-neutral-800 bg-[#121212]/30 p-6 text-center">
+                          <p className="text-xs text-neutral-500">No team updates yet. Be the first to post.</p>
+                        </div>
                       ) : (
-                        <div className="space-y-1">
-                          {teamMembers.map((m) => (
-                            <div key={m.user_id} className="text-xs text-neutral-400">
-                              {m.profiles?.username || m.user_id.slice(0,8)} {m.user_id === userId && '(you)'}
-                            </div>
-                          ))}
+                        <div className="space-y-2">
+                          {logs.map((entry) => {
+                            const name = entry.profiles?.username || 'Member';
+                            return (
+                              <div key={entry.id} className="rounded-xl border border-neutral-800 bg-[#121212]/60 p-4">
+                                <div className="flex items-center gap-2 mb-1.5">
+                                  <div className="w-6 h-6 rounded-full bg-neutral-800 flex items-center justify-center text-[10px] font-extrabold text-neutral-300">
+                                    {initials(name)}
+                                  </div>
+                                  <span className="text-xs font-semibold text-neutral-200">{name}</span>
+                                  {entry.user_id === userId && <span className="text-[9px] text-amber-300 font-bold">YOU</span>}
+                                  <span className="ml-auto text-[10px] text-neutral-500 inline-flex items-center gap-1.5">
+                                    <FreshnessDot iso={entry.created_at} />
+                                    <Clock className="w-2.5 h-2.5" /> {timeAgo(entry.created_at)}
+                                  </span>
+                                </div>
+                                <p className="text-sm text-neutral-300 leading-relaxed pl-8">{entry.note}</p>
+                              </div>
+                            );
+                          })}
                         </div>
                       )}
                     </div>
-                  </div>
+                  </section>
                 );
               })}
-            </div>
-          )}
 
-          <div className="mt-8 rounded-2xl border border-dashed border-neutral-800 bg-[#121212]/30 p-6 text-center">
-            <h4 className="text-xs font-bold text-neutral-400 mb-2">Join Team</h4>
-            <p className="text-xs text-neutral-600 mb-3">Team invites via email/username currently manual via Supabase. Insert into `team_members` table.</p>
-          </div>
+              {/* Other teams in cohort */}
+              {otherTeams.length > 0 && (
+                <section>
+                  <h3 className="text-[10px] font-extrabold text-neutral-500 uppercase tracking-[0.2em] mb-4">
+                    Other teams in your cohort
+                  </h3>
+                  <div className="grid sm:grid-cols-2 gap-3">
+                    {otherTeams.map((team) => (
+                      <div key={team.id} className="rounded-xl border border-neutral-800 bg-[#121212]/40 p-4">
+                        <div className="flex items-start justify-between gap-2 mb-1">
+                          <h4 className="text-sm font-extrabold text-white truncate">{team.name}</h4>
+                          <span className={`shrink-0 inline-flex px-2 py-0.5 rounded text-[9px] font-extrabold tracking-wider ${STAGE_COPY[team.startup_stage || 'idea']?.color || STAGE_COPY.idea.color}`}>
+                            {STAGE_COPY[team.startup_stage || 'idea']?.label || 'Idea'}
+                          </span>
+                        </div>
+                        {team.startup_title && (
+                          <p className="text-xs text-neutral-400 truncate">{team.startup_title}</p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              )}
+            </>
+          )}
         </div>
       </main>
+    </>
+  );
+}
+
+function NotOnTeamState({ otherCount }: { otherCount: number }) {
+  return (
+    <>
+      <div className="rounded-2xl border border-amber-700/40 bg-amber-950/20 p-6 md:p-8 mb-6">
+        <h3 className="text-base font-extrabold mb-2 text-amber-100">You haven&apos;t been assigned to a team yet</h3>
+        <p className="text-sm text-neutral-400 leading-relaxed">
+          Your cohort lead will assign you to a squad before Day 1. Teams are 3–4 members working on a shared startup idea.
+        </p>
+      </div>
+      {otherCount > 0 && (
+        <div>
+          <h3 className="text-[10px] font-extrabold text-neutral-500 uppercase tracking-[0.2em] mb-3">Teams forming in your cohort</h3>
+          <p className="text-xs text-neutral-500">
+            {otherCount} {otherCount === 1 ? 'squad is' : 'squads are'} being assembled. You&apos;ll see the full roster here once your team is set.
+          </p>
+        </div>
+      )}
     </>
   );
 }

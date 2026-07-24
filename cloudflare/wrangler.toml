@@ -1,0 +1,18 @@
+# Cloudflare Worker config
+# Deploy with: wrangler deploy
+
+name = "discipline-edge"
+main = "worker.ts"
+compatibility_date = "2024-09-01"
+
+# Routes: this worker runs in front of these paths.
+# Adjust to your domain.
+routes = [
+  { pattern = "lockin.app/*", custom_domain = true },
+  { pattern = "www.lockin.app/*", custom_domain = true },
+]
+
+# Environment variables (set in Cloudflare dashboard for secrets)
+# BACKEND_URL is required — set to your Vercel deployment URL
+[vars]
+# BACKEND_URL = "https://discipline.vercel.app"  # set this in CF dashboard

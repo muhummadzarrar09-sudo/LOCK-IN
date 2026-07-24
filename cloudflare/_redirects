@@ -1,0 +1,5 @@
+# Cloudflare Pages _redirects
+# Static redirects. Wildcard for common typos.
+
+# Trailing slash → no trailing slash (Vercel does this too, but belt + suspenders)
+/* /  /:splat  301
