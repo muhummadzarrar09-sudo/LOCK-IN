@@ -9,6 +9,7 @@ import EmptyState from '@/components/EmptyState';
 import { SkeletonList } from '@/components/Skeleton';
 import { usePagination, LoadMoreSentinel } from '@/lib/pagination';
 import { useRealtimeTable } from '@/lib/realtime';
+import { useDebouncedValue } from '@/lib/useDebouncedValue';
 
 type LeaderEntry = {
   id: string;
@@ -23,6 +24,7 @@ const PAGE_SIZE = 30;
 export default function LeaderboardPage() {
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [query, setQuery] = useState('');
+  const debouncedQuery = useDebouncedValue(query, 250);
   const [cohortAvg, setCohortAvg] = useState(0);
   const [activeToday, setActiveToday] = useState<number | null>(null);
   const [totalMembers, setTotalMembers] = useState<number | null>(null);
@@ -33,7 +35,7 @@ export default function LeaderboardPage() {
     // When searching: query a wide range and filter server-side-ish (we still
     // do client filter below, but we pull a much bigger window so users
     // beyond the first 30 are findable).
-    const useWideRange = query.trim().length > 0;
+    const useWideRange = debouncedQuery.trim().length > 0;
     const rangeFrom = useWideRange ? 0 : from;
     const rangeTo = useWideRange ? 999 : to;
     const { data, error } = await supabase
@@ -71,14 +73,14 @@ export default function LeaderboardPage() {
     // beyond page 1.
     let out = (data || []) as LeaderEntry[];
     if (useWideRange) {
-      const q = query.toLowerCase();
+      const q = debouncedQuery.toLowerCase();
       out = out.filter((e) => e.username.toLowerCase().includes(q));
       // Apply requested page slice
       out = out.slice(from, from + pageSize);
     }
 
     return { rows: out, hasMore: useWideRange ? out.length === pageSize : (data || []).length === pageSize };
-  }, [query]);
+  }, [debouncedQuery]);
 
   const { rows, loading, loadingMore, hasMore, loadMore, error, refresh } = usePagination<LeaderEntry>({
     fetcher,
@@ -92,7 +94,7 @@ export default function LeaderboardPage() {
   // returns the first page of matches, not the existing paged results).
   useEffect(() => {
     refresh();
-  }, [query, refresh]);
+  }, [debouncedQuery, refresh]);
 
   // The fetcher already filters when query is set. The rows returned
   // are already the right slice.

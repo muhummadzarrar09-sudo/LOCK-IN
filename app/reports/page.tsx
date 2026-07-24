@@ -8,6 +8,7 @@ import EmptyState from '@/components/EmptyState';
 import { SkeletonList } from '@/components/Skeleton';
 import { usePagination, LoadMoreSentinel } from '@/lib/pagination';
 import { FreshnessDot } from '@/components/FreshnessDot';
+import { useDebouncedValue } from '@/lib/useDebouncedValue';
 
 type Report = {
   id: string;
@@ -35,13 +36,14 @@ function readingTime(body: string): string {
 export default function ReportsPage() {
   const [selected, setSelected] = useState<Report | null>(null);
   const [query, setQuery] = useState('');
+  const debouncedQuery = useDebouncedValue(query, 250);
 
   const fetcher = useCallback(async (page: number, pageSize: number) => {
-    const useWideRange = query.trim().length > 0;
+    const useWideRange = debouncedQuery.trim().length > 0;
     let data: any[] = [];
     if (useWideRange) {
       // Search by title/body across the whole table, then paginate the matches.
-      const q = query.trim();
+      const q = debouncedQuery.trim();
       const { data: byTitle, error: e1 } = await supabase
         .from('reports')
         .select('*')
@@ -62,14 +64,14 @@ export default function ReportsPage() {
       data = byDate || [];
     }
     return { rows: data as Report[], hasMore: data.length === pageSize };
-  }, [query]);
+  }, [debouncedQuery]);
 
   const { rows, loading, loadingMore, hasMore, loadMore, error, refresh } = usePagination<Report>({ fetcher, pageSize: PAGE_SIZE });
 
   // Reset pagination when search query changes
   useEffect(() => {
     refresh();
-  }, [query, refresh]);
+  }, [debouncedQuery, refresh]);
 
   const filtered = rows;
 

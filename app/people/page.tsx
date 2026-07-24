@@ -9,6 +9,7 @@ import EmptyState from '@/components/EmptyState';
 import { Skeleton, SkeletonList } from '@/components/Skeleton';
 import { usePagination, LoadMoreSentinel } from '@/lib/pagination';
 import { initials } from '@/lib/ui';
+import { useDebouncedValue } from '@/lib/useDebouncedValue';
 
 type Member = {
   id: string;
@@ -34,6 +35,7 @@ const SORT_OPTIONS: { id: SortKey; label: string; icon: any }[] = [
 
 export default function PeoplePage() {
   const [query, setQuery] = useState('');
+  const debouncedQuery = useDebouncedValue(query, 250);
   const [sort, setSort] = useState<SortKey>('rank');
   const [sortOpen, setSortOpen] = useState(false);
   const [activeToday, setActiveToday] = useState<number | null>(null);
@@ -52,8 +54,8 @@ export default function PeoplePage() {
         .range(from, to);
       if (error) throw error;
       let rows = (data || []) as any[];
-      if (query.trim()) {
-        const q = query.toLowerCase();
+      if (debouncedQuery.trim()) {
+        const q = debouncedQuery.toLowerCase();
         rows = rows.filter((m) => m.username.toLowerCase().includes(q));
       }
       // Hydrate streaks + achievements for these rows
@@ -91,8 +93,8 @@ export default function PeoplePage() {
 
     let rows = (data || []) as any[];
 
-    if (query.trim()) {
-      const q = query.toLowerCase();
+    if (debouncedQuery.trim()) {
+      const q = debouncedQuery.toLowerCase();
       rows = rows.filter((m) => m.username.toLowerCase().includes(q));
     }
 
@@ -115,7 +117,7 @@ export default function PeoplePage() {
     }
 
     return { rows: rows as Member[], hasMore: rows.length === pageSize };
-  }, [query, sort]);
+  }, [debouncedQuery, sort]);
 
   const { rows, loading, loadingMore, hasMore, loadMore, error, refresh } = usePagination<Member>({ fetcher, pageSize: PAGE_SIZE });
 
