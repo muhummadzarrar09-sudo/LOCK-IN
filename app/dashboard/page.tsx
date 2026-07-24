@@ -15,6 +15,7 @@ import { DashboardTeamPulse } from '@/components/DashboardTeamPulse';
 import { NextMilestone } from '@/components/NextMilestone';
 import { WeeklyRecapModal } from '@/components/WeeklyRecapModal';
 import { CohortComparison } from '@/components/CohortComparison';
+import { WeekProgressRing } from '@/components/WeekProgressRing';
 import { ACHIEVEMENTS, AchievementCode, getAchievement } from '@/lib/achievements';
 
 type BlockType = 'work' | 'break' | 'movement' | 'reflection';
@@ -453,11 +454,14 @@ export default function DashboardPage() {
 
           {/* Cohort comparison: rank, percentile, head-to-head */}
           {!cohortDayInfo.isPreCohort && !cohortDayInfo.isPostCohort && (
-            <CohortComparison
-              userId={userId || ''}
-              currentStreak={streak}
-              currentBest={bestStreak}
-            />
+            <div className="grid md:grid-cols-2 gap-3 mb-2">
+              <CohortComparison
+                userId={userId || ''}
+                currentStreak={streak}
+                currentBest={bestStreak}
+              />
+              <WeekProgressRing userId={userId || ''} />
+            </div>
           )}
 
           {/* Primary CTA: the "now" question */}

@@ -93,7 +93,7 @@ export function CohortComparison({ userId, currentStreak, currentBest }: Props) 
   const isAboveAvg = currentStreak > data.avg;
 
   return (
-    <div className="rounded-2xl border border-neutral-800 bg-[#121212]/60 p-5 mb-6">
+    <div className="rounded-2xl border border-neutral-800 bg-[#121212]/60 p-5">
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
           <Users className="w-3.5 h-3.5 text-amber-300" />
