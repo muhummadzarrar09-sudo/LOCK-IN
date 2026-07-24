@@ -6,7 +6,7 @@ import Navbar from '@/components/Navbar';
 import PageHeader from '@/components/PageHeader';
 import EmptyState from '@/components/EmptyState';
 import { SkeletonList } from '@/components/Skeleton';
-import { useRealtimeTable } from '@/lib/realtime';
+import { useRealtimeTableIn } from '@/lib/realtime';
 
 type Team = {
   id: string;
@@ -151,7 +151,7 @@ export default function TeamPage() {
     }
   }, [myTeams]);
 
-  useRealtimeTable('team_startup_log', 'INSERT', refreshLogs, undefined, [refreshLogs]);
+  useRealtimeTableIn('team_startup_log', 'INSERT', 'team_id', myTeams, refreshLogs, [refreshLogs, myTeams]);
 
   return (
     <>

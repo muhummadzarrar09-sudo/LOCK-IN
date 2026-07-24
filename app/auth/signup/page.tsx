@@ -1,12 +1,11 @@
 "use client";
-import { useState, useEffect, useMemo, Suspense } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useState, useEffect, useMemo } from 'react';
+import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { Loader2, Check, Mail, Sparkles } from 'lucide-react';
+import { Loader2, Check } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import Field from '@/components/Field';
 import { compose, email, minLength, username as usernameRule, validateValues, hasErrors } from '@/lib/validation';
-import { lookupInvite, consumeInvite, type Invite } from '@/lib/invites';
 
 function passwordStrength(p: string): { score: 0 | 1 | 2 | 3 | 4; label: string; color: string } {
   if (!p) return { score: 0, label: '', color: 'bg-neutral-800' };
@@ -25,11 +24,8 @@ function passwordStrength(p: string): { score: 0 | 1 | 2 | 3 | 4; label: string;
   return { score: s as 0 | 1 | 2 | 3 | 4, label: map[s as 0 | 1 | 2 | 3 | 4].label, color: map[s as 0 | 1 | 2 | 3 | 4].color };
 }
 
-function SignupForm() {
+export default function SignupPage() {
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const inviteToken = searchParams.get('token') || null;
-
   const [values, setValues] = useState({ username: '', email: '', password: '', confirm: '' });
   const [fieldErrors, setFieldErrors] = useState<Record<string, string | undefined>>({});
   const [formError, setFormError] = useState<string | null>(null);
@@ -37,33 +33,12 @@ function SignupForm() {
   const [success, setSuccess] = useState(false);
   const [needsEmailVerification, setNeedsEmailVerification] = useState(false);
   const [timezone, setTimezone] = useState('');
-  const [invite, setInvite] = useState<Invite | null | 'invalid'>(null); // null = loading, Invite = valid, 'invalid' = bad token
 
   useEffect(() => {
     try {
       setTimezone(Intl.DateTimeFormat().resolvedOptions().timeZone || '');
     } catch { /* ignore */ }
   }, []);
-
-  useEffect(() => {
-    if (!inviteToken) {
-      setInvite(null);
-      return;
-    }
-    let cancelled = false;
-    (async () => {
-      const inv = await lookupInvite(inviteToken);
-      if (!cancelled) setInvite(inv ?? 'invalid');
-    })();
-    return () => { cancelled = true; };
-  }, [inviteToken]);
-
-  // Pre-fill email from invite
-  useEffect(() => {
-    if (invite && typeof invite === 'object' && invite.email && !values.email) {
-      setValues((p) => ({ ...p, email: invite.email }));
-    }
-  }, [invite, values.email]);
 
   const strength = useMemo(() => passwordStrength(values.password), [values.password]);
   const passwordMismatch = values.confirm.length > 0 && values.password !== values.confirm;
@@ -76,12 +51,6 @@ function SignupForm() {
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
     setFormError(null);
-
-    // If we have a token but it was invalid, block
-    if (inviteToken && invite === 'invalid') {
-      setFormError('This invite link is invalid or has expired. Please request a new one.');
-      return;
-    }
 
     const errs = validateValues(values, {
       username: usernameRule,
@@ -126,15 +95,12 @@ function SignupForm() {
         return;
       }
 
-      // Session exists — create profile, consume invite
+      // Session exists — create profile
       if (data.user && data.session) {
         await supabase.from('profiles').upsert(
           { id: data.user.id, username: values.username, email: values.email, role: 'member' } as any,
           { onConflict: 'id' }
         );
-        if (inviteToken) {
-          await consumeInvite(inviteToken, data.user.id);
-        }
       }
 
       setSuccess(true);
@@ -180,35 +146,10 @@ function SignupForm() {
     );
   }
 
-  // Invite banner
-  const inviteBanner = invite && typeof invite === 'object' ? (
-    <div className="rounded-xl border border-amber-700/30 bg-amber-950/20 p-3.5 mb-5 flex items-start gap-3">
-      <div className="w-8 h-8 rounded-lg bg-amber-400/10 flex items-center justify-center shrink-0">
-        <Sparkles className="w-4 h-4 text-amber-300" />
-      </div>
-      <div className="flex-1 min-w-0">
-        <p className="text-[11px] uppercase tracking-wider text-amber-300 font-bold">Cohort invite</p>
-        <p className="text-xs text-amber-100 mt-0.5">Your spot is reserved. Finish signup to join.</p>
-      </div>
-    </div>
-  ) : invite === 'invalid' ? (
-    <div className="rounded-xl border border-red-900/40 bg-red-950/15 p-3.5 mb-5 flex items-start gap-3">
-      <div className="w-8 h-8 rounded-lg bg-red-500/10 flex items-center justify-center shrink-0">
-        <Mail className="w-4 h-4 text-red-300" />
-      </div>
-      <div className="flex-1 min-w-0">
-        <p className="text-[11px] uppercase tracking-wider text-red-300 font-bold">Invite expired</p>
-        <p className="text-xs text-red-200/80 mt-0.5">This invite link is no longer valid. Request a new one from your cohort lead.</p>
-      </div>
-    </div>
-  ) : null;
-
   return (
     <>
       <h2 className="text-xl font-bold mb-2 tracking-tight">Join the Cohort</h2>
       <p className="text-xs text-neutral-500 mb-6">30-day execution cohort · Members only · No refunds</p>
-
-      {inviteBanner}
 
       <form onSubmit={handleSignup} className="space-y-5" noValidate>
         <Field label="Username" required error={fieldErrors.username}>
@@ -241,7 +182,6 @@ function SignupForm() {
               value={values.email}
               onChange={(e) => update('email', e.target.value)}
               autoComplete="email"
-              readOnly={!!(invite && typeof invite === 'object')}
               aria-invalid={!!fieldErrors.email}
               aria-describedby={describedBy}
               className={`w-full h-11 rounded-lg bg-neutral-900/60 border px-4 text-sm text-white placeholder-neutral-600 focus:outline-none focus:ring-1 transition-all ${
@@ -364,13 +304,5 @@ function SignupForm() {
         </p>
       </div>
     </>
-  );
-}
-
-export default function SignupPage() {
-  return (
-    <Suspense fallback={<div className="text-sm text-neutral-500 animate-pulse">Loading…</div>}>
-      <SignupForm />
-    </Suspense>
   );
 }

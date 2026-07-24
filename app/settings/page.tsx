@@ -157,17 +157,8 @@ function SettingsPageInner() {
       setReportOpen(false);
       setReportText('');
     } catch (err: any) {
-      // Fall back to mailto: if Supabase insert fails
-      const subject = encodeURIComponent(`Discipline — Bug report from ${userEmail || 'member'}`);
-      const body = encodeURIComponent(
-        `${reportText}\n\n---\nUser: ${userEmail}\nURL: ${typeof window !== 'undefined' ? window.location.href : ''}\nUser agent: ${typeof navigator !== 'undefined' ? navigator.userAgent : ''}\nTime: ${new Date().toISOString()}`
-      );
-      window.location.href = `mailto:support@accountability.com?subject=${subject}&body=${body}`;
-      toast.info('Sent via email as fallback.');
-      setTimeout(() => {
-        setReportOpen(false);
-        setReportText('');
-      }, 500);
+      console.warn('bug report submit failed:', err);
+      toast.error('Could not send. Please email support@accountability.com directly.');
     } finally {
       setSendingReport(false);
     }

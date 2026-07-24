@@ -17,8 +17,8 @@ export function NotificationBell({ userId }: { userId: string | null }) {
   const toast = useToast();
   const [counts, setCounts] = useState<Counts>({ reports: 0, community: 0, team: 0 });
   const [permission, setPermission] = useState<NotificationPermission>('default');
+  const [myTeamIds, setMyTeamIds] = useState<string[]>([]);
 
-  // Compute counts (reports / community / team updates newer than lastSeen)
   const recompute = useCallback(async () => {
     if (!userId) return;
     const lastSeen = (() => {
@@ -26,22 +26,30 @@ export function NotificationBell({ userId }: { userId: string | null }) {
     })();
 
     try {
-      const [{ data: reports }, { data: community }, { data: team }] = await Promise.all([
+      // Load team memberships in parallel with counts
+      const [{ data: reports }, { data: community }, { data: memberships }] = await Promise.all([
         supabase.from('reports').select('id, created_at').gt('created_at', lastSeen),
         supabase.from('community_posts').select('id, created_at').gt('created_at', lastSeen),
-        // team updates: any log entry newer than lastSeen, where the user is on the team
-        (async () => {
-          const { data: memberships } = await supabase.from('team_members').select('team_id').eq('user_id', userId);
-          const teamIds = (memberships || []).map((m: any) => m.team_id);
-          if (teamIds.length === 0) return { data: [] };
-          return await supabase.from('team_startup_log').select('id, created_at').in('team_id', teamIds).gt('created_at', lastSeen);
-        })(),
+        supabase.from('team_members').select('team_id').eq('user_id', userId),
       ]);
+
+      const teamIds = (memberships || []).map((m: any) => m.team_id);
+      setMyTeamIds(teamIds);
+
+      let teamCount = 0;
+      if (teamIds.length > 0) {
+        const { count } = await supabase
+          .from('team_startup_log')
+          .select('*', { count: 'exact', head: true })
+          .in('team_id', teamIds)
+          .gt('created_at', lastSeen);
+        teamCount = count || 0;
+      }
 
       setCounts({
         reports: reports?.length || 0,
         community: community?.length || 0,
-        team: team?.length || 0,
+        team: teamCount,
       });
     } catch (e) {
       // silent — count badge is non-critical
@@ -52,11 +60,44 @@ export function NotificationBell({ userId }: { userId: string | null }) {
     if (typeof Notification !== 'undefined') setPermission(Notification.permission);
   }, []);
 
+  // Initial load
   useEffect(() => {
     recompute();
-    const id = setInterval(recompute, 60_000); // refresh every minute
-    return () => clearInterval(id);
   }, [recompute]);
+
+  // Real-time: when a new report / community post / team log appears, refresh counts
+  useEffect(() => {
+    if (!userId) return;
+
+    const reportsChannel = supabase
+      .channel(`bell:reports`)
+      .on('postgres_changes' as any, { event: 'INSERT', schema: 'public', table: 'reports' }, () => recompute())
+      .subscribe();
+
+    const communityChannel = supabase
+      .channel(`bell:community`)
+      .on('postgres_changes' as any, { event: 'INSERT', schema: 'public', table: 'community_posts' }, () => recompute())
+      .subscribe();
+
+    // Team log channel — only subscribe once we know which teams the user is in
+    let teamChannel: any = null;
+    const setupTeamChannel = async () => {
+      const { data: memberships } = await supabase.from('team_members').select('team_id').eq('user_id', userId);
+      const teamIds = (memberships || []).map((m: any) => m.team_id);
+      if (teamIds.length === 0) return;
+      teamChannel = supabase
+        .channel(`bell:team_log`)
+        .on('postgres_changes' as any, { event: 'INSERT', schema: 'public', table: 'team_startup_log', filter: `team_id=in.(${teamIds.join(',')})` }, () => recompute())
+        .subscribe();
+    };
+    setupTeamChannel();
+
+    return () => {
+      supabase.removeChannel(reportsChannel);
+      supabase.removeChannel(communityChannel);
+      if (teamChannel) supabase.removeChannel(teamChannel);
+    };
+  }, [userId, myTeamIds, recompute]);
 
   const total = counts.reports + counts.community + counts.team;
 
