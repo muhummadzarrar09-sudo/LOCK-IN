@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { Crown, Sparkles, X, Award } from 'lucide-react';
 import { getAchievement } from '@/lib/achievements';
 
@@ -13,10 +13,25 @@ type Props = {
 // Auto-dismisses after 5s but stays interactive.
 export function AchievementCelebration({ code, onClose }: Props) {
   const [open, setOpen] = useState(false);
+  const lastShownRef = useRef<string | null>(null);
 
   useEffect(() => {
-    if (!code) return;
+    if (!code || lastShownRef.current === code) return;
+    lastShownRef.current = code;
     setOpen(true);
+    // Best-effort: also fire a real OS notification so the user sees it
+    // even if they have the tab backgrounded.
+    if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
+      try {
+        const meta = getAchievement(code);
+        if (meta) {
+          new Notification(`${meta.title} unlocked`, {
+            body: meta.blurb,
+            tag: 'achievement',
+          });
+        }
+      } catch { /* notifications may be blocked */ }
+    }
     const t = setTimeout(() => {
       setOpen(false);
       setTimeout(onClose, 220);

@@ -259,17 +259,53 @@ function Step2({ form, setForm }: { form: any; setForm: any }) {
 
 function Step3({ username }: { username: string }) {
   return (
-    <div className="fade-in-up text-center">
-      <div className="w-14 h-14 rounded-2xl bg-amber-500/15 border border-amber-500/30 mx-auto mb-4 flex items-center justify-center">
-        <Check className="w-7 h-7 text-amber-300" strokeWidth={2.5} />
+    <div className="fade-in-up">
+      <div className="text-center mb-5">
+        <div className="w-14 h-14 rounded-2xl bg-amber-500/15 border border-amber-500/30 mx-auto mb-4 flex items-center justify-center">
+          <Check className="w-7 h-7 text-amber-300" strokeWidth={2.5} />
+        </div>
+        <p className="text-[10px] uppercase tracking-[0.3em] text-amber-300/80 font-bold mb-2">Step 4 of 4</p>
+        <h1 className="font-serif text-3xl md:text-4xl tracking-tighter text-white mb-2">
+          You&apos;re ready, {username || 'friend'}.
+        </h1>
+        <p className="text-sm text-neutral-400 leading-relaxed max-w-sm mx-auto">
+          Your team will be assigned before Day 1. Here&apos;s what your first day looks like:
+        </p>
       </div>
-      <p className="text-[10px] uppercase tracking-[0.3em] text-amber-300/80 font-bold mb-3">Step 4 of 4</p>
-      <h1 className="font-serif text-3xl md:text-4xl tracking-tighter text-white mb-3">
-        You&apos;re ready, {username || 'friend'}.
-      </h1>
-      <p className="text-sm text-neutral-400 leading-relaxed max-w-sm mx-auto">
-        Your cohort dashboard is waiting. Your team will be assigned before Day 1 — you&apos;ll get a notification when it&apos;s set.
-      </p>
+
+      {/* Mini Day 1 schedule preview */}
+      <div className="rounded-xl border border-neutral-800 bg-[#0D0D0D]/60 p-4 mt-2">
+        <div className="flex items-center gap-2 mb-3">
+          <Compass className="w-3.5 h-3.5 text-amber-300" />
+          <h3 className="text-[10px] font-extrabold text-neutral-500 uppercase tracking-[0.2em]">Day 1 preview</h3>
+        </div>
+        <ul className="space-y-1.5">
+          {[
+            { t: '06:00 – 09:00', label: 'Deep work block 1', type: 'work' },
+            { t: '09:00 – 09:30', label: 'Protected break', type: 'break' },
+            { t: '09:30 – 12:00', label: 'Deep work block 2', type: 'work' },
+            { t: '12:00 – 12:30', label: 'Movement', type: 'movement' },
+            { t: '12:30 – 13:00', label: 'Reflection / journal', type: 'reflection' },
+            { t: '13:00 – 16:00', label: 'Deep work block 3', type: 'work' },
+          ].map((b) => {
+            const dotColor =
+              b.type === 'work' ? 'bg-amber-300' :
+              b.type === 'break' ? 'bg-sky-300' :
+              b.type === 'movement' ? 'bg-emerald-300' :
+              'bg-violet-300';
+            return (
+              <li key={b.t} className="flex items-center gap-2.5 text-xs">
+                <span className={`w-1.5 h-1.5 rounded-full ${dotColor} shrink-0`} />
+                <span className="font-mono text-neutral-500 text-[10px] w-[88px] shrink-0">{b.t}</span>
+                <span className="text-neutral-200 truncate">{b.label}</span>
+              </li>
+            );
+          })}
+        </ul>
+        <p className="text-[10px] text-neutral-500 mt-3 leading-relaxed pt-2 border-t border-neutral-900">
+          Tap any block on the dashboard to check in. Six blocks per day, every day for 30 days.
+        </p>
+      </div>
     </div>
   );
 }
