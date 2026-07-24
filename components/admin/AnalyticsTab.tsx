@@ -25,6 +25,8 @@ type CohortMetrics = {
   top_members: TopMember[];
   top_posters: TopPoster[];
   needs_nudge: TopMember[]; // members with 0 check-ins in the last 3 days
+  peak_hour: { hour: number; count: number } | null; // most common check-in hour
+  checkins_by_hour: number[]; // 24-element array
 };
 
 export function AnalyticsTab() {
@@ -119,6 +121,18 @@ export function AnalyticsTab() {
       // Top members by check-in count
       const checkInCounts = new Map<string, number>();
       checkIns.forEach((c) => checkInCounts.set(c.user_id, (checkInCounts.get(c.user_id) || 0) + 1));
+
+      // Check-ins by hour of day (UTC for simplicity — could be cohort TZ)
+      const byHour = new Array(24).fill(0);
+      checkIns.forEach((c) => {
+        const h = new Date(c.completed_at).getUTCHours();
+        byHour[h] = (byHour[h] || 0) + 1;
+      });
+      const maxHour = byHour.reduce<{ hour: number; count: number } | null>((acc, count, hour) => {
+        if (acc === null || count > acc.count) return { hour, count };
+        return acc;
+      }, null);
+      const peakHour = maxHour && maxHour.count > 0 ? maxHour : null;
       const streakMap = new Map<string, { current: number; best: number }>();
       streaks.forEach((s) => streakMap.set(s.user_id, { current: s.current_streak || 0, best: s.best_streak || 0 }));
       const usernameMap = new Map<string, string>();
@@ -179,6 +193,8 @@ export function AnalyticsTab() {
         top_members: topMembers,
         top_posters: topPosters,
         needs_nudge: needsNudge,
+        peak_hour: peakHour,
+        checkins_by_hour: byHour,
       });
       setDailyActive((dailyActiveData || []) as DailyActive[]);
     } catch (e) {
@@ -283,6 +299,41 @@ export function AnalyticsTab() {
                     style={{ opacity: Math.max(0.15, d.active_members / Math.max(metrics.total_members, 1)) }}
                   />
                   <span className="text-[8px] text-neutral-600 mt-1 font-mono">{date.getDate()}</span>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      )}
+
+      {/* Peak check-in hour heatmap */}
+      {metrics.checkins_by_hour.length === 24 && metrics.checkins_by_hour.some((n) => n > 0) && (
+        <section className="rounded-2xl border border-neutral-800 bg-[#121212]/60 p-6">
+          <div className="flex items-center justify-between mb-1">
+            <h3 className="text-xs font-extrabold text-neutral-500 uppercase tracking-[0.2em]">Check-in by hour (UTC)</h3>
+            {metrics.peak_hour && (
+              <span className="text-[10px] text-amber-300 font-bold uppercase tracking-wider">
+                Peak: {String(metrics.peak_hour.hour).padStart(2, '0')}:00 · {metrics.peak_hour.count} check-ins
+              </span>
+            )}
+          </div>
+          <p className="text-[10px] text-neutral-500 mb-4">When your cohort actually shows up. Useful for scheduling reports, broadcasts, or reminders.</p>
+          <div className="grid grid-cols-12 sm:grid-cols-24 gap-1">
+            {metrics.checkins_by_hour.map((n, h) => {
+              const max = Math.max(...metrics.checkins_by_hour);
+              const intensity = max > 0 ? n / max : 0;
+              const isPeak = metrics.peak_hour && h === metrics.peak_hour.hour;
+              return (
+                <div key={h} className="flex flex-col items-center" title={`${String(h).padStart(2, '0')}:00 — ${n} check-ins`}>
+                  <div
+                    className={`w-full aspect-square rounded ${isPeak ? 'ring-1 ring-amber-300' : ''}`}
+                    style={{
+                      background: `rgba(251, 191, 36, ${Math.max(0.05, intensity * 0.85)})`,
+                    }}
+                  />
+                  <span className={`text-[8px] font-mono mt-1 ${isPeak ? 'text-amber-300 font-extrabold' : 'text-neutral-600'}`}>
+                    {h % 3 === 0 ? String(h).padStart(2, '0') : ''}
+                  </span>
                 </div>
               );
             })}
