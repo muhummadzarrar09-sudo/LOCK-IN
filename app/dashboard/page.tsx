@@ -53,7 +53,7 @@ export default function DashboardPage() {
   const [timezone, setTimezone] = useState('');
   const [today, setToday] = useState('');
   const [userEmail, setUserEmail] = useState('');
-  const [profile, setProfile] = useState<{ username: string } | null>(null);
+  const [profile, setProfile] = useState<{ username: string; created_at?: string } | null>(null);
   const [cohort, setCohort] = useState<any>(null);
   const [loadingAuth, setLoadingAuth] = useState(true);
   const [loadingBlocks, setLoadingBlocks] = useState(true);
@@ -89,9 +89,9 @@ export default function DashboardPage() {
         if (session.user.email) setUserEmail(session.user.email);
 
         // Role (loaded but not currently surfaced on dashboard; available for future use)
-        const { data: prof } = await supabase.from('profiles').select('role, username').eq('id', uid).maybeSingle();
+        const { data: prof } = await supabase.from('profiles').select('role, username, created_at').eq('id', uid).maybeSingle();
         if (prof) {
-          setProfile({ username: (prof as any).username || '' });
+          setProfile({ username: (prof as any).username || '', created_at: (prof as any).created_at });
         }
 
         // Active cohort (enrollment_open=true or current date in range)
@@ -445,6 +445,26 @@ export default function DashboardPage() {
 
           {/* Streak freeze banner (if user has unused freezes) */}
           <StreakFreezeBanner />
+
+          {/* Welcome banner — only for first-day users */}
+          {profile?.created_at && (Date.now() - new Date(profile.created_at).getTime()) < 24 * 60 * 60 * 1000 && (
+            <div className="mt-4 mb-2 rounded-2xl border border-amber-500/40 bg-gradient-to-br from-amber-950/40 via-amber-900/20 to-amber-950/10 p-5 md:p-6">
+              <div className="flex items-start gap-3">
+                <div className="w-10 h-10 rounded-xl bg-amber-400/20 flex items-center justify-center shrink-0">
+                  <span className="text-2xl">👋</span>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-[10px] uppercase tracking-[0.3em] text-amber-300/80 font-bold">Welcome to the cohort</p>
+                  <h2 className="text-lg md:text-xl font-extrabold text-amber-100 mt-1 leading-tight">
+                    You\u2019re in. Here\u2019s the deal.
+                  </h2>
+                  <p className="text-xs text-amber-200/80 leading-relaxed mt-2">
+                    Six time blocks per day. Check in when you finish one. Your team sees everything. The streak compounds. That\u2019s it.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Next milestone widget — shows the next badge in the user's path */}
           <div className="mt-4 mb-2">

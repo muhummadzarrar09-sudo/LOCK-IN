@@ -154,8 +154,9 @@ export default function HomePage() {
       {/* Footer */}
       <footer className="max-w-4xl mx-auto px-6 py-12 border-t border-neutral-900 flex flex-col md:flex-row items-center justify-between gap-3 text-xs text-neutral-600">
         <span className="font-semibold tracking-wider">DISCIPLINE COHORT</span>
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-4 flex-wrap justify-center">
           <span>Members only · No ads · Built for builders</span>
+          <Link href="/whats-new" className="hover:text-amber-300 transition-colors font-semibold">What\u2019s new</Link>
           <Link href="/privacy" className="hover:text-amber-300 transition-colors">Privacy</Link>
           <Link href="/terms" className="hover:text-amber-300 transition-colors">Terms</Link>
         </div>
