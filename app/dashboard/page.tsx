@@ -17,6 +17,7 @@ import { WeeklyRecapModal } from '@/components/WeeklyRecapModal';
 import { CohortComparison } from '@/components/CohortComparison';
 import { ShareCardModal } from '@/components/ShareCardModal';
 import { WeekProgressRing } from '@/components/WeekProgressRing';
+import { useToast } from '@/components/Toast';
 import { ACHIEVEMENTS, AchievementCode, getAchievement } from '@/lib/achievements';
 
 type BlockType = 'work' | 'break' | 'movement' | 'reflection';
@@ -43,6 +44,7 @@ const DEFAULT_TEMPLATE: Omit<Block, 'id' | 'completed'>[] = [
 
 export default function DashboardPage() {
   const router = useRouter();
+  const toast = useToast();
   const [blocks, setBlocks] = useState<Block[]>([]);
   const [streak, setStreak] = useState(0);
   const [bestStreak, setBestStreak] = useState(0);
@@ -260,17 +262,25 @@ export default function DashboardPage() {
         return;
       }
 
-      if (newCompleted) {
-        const { error } = await (supabase.from('check_ins') as any).upsert({
-          user_id: userId,
-          time_block_id: realId,
-          completed_at: new Date().toISOString(),
-          missed: false,
-        }, { onConflict: 'user_id,time_block_id' });
-        if (error) {
-          console.warn('check_in upsert error:', error.message);
-        } else {
-          setTimeout(async () => {
+    if (newCompleted) {
+      const wasFirstEver = totalCheckIns === 0;
+      const { error } = await (supabase.from('check_ins') as any).upsert({
+        user_id: userId,
+        time_block_id: realId,
+        completed_at: new Date().toISOString(),
+        missed: false,
+      }, { onConflict: 'user_id,time_block_id' });
+      if (error) {
+        console.warn('check_in upsert error:', error.message);
+      } else {
+        setTotalCheckIns((n) => n + 1);
+        // First-ever check-in: small celebratory toast (the Achievement modal
+        // only fires on streak milestones, but the very first check-in is
+        // a separate memorable moment).
+        if (wasFirstEver) {
+          toast.success('First check-in logged. The streak begins.');
+        }
+        setTimeout(async () => {
             const { data } = await supabase.from('streaks').select('current_streak, best_streak').eq('user_id', userId).maybeSingle();
             if (data) {
               setStreak((data as any).current_streak || 0);
