@@ -1,15 +1,20 @@
 "use client";
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import { CheckCircle2, XCircle, Flame, Shield, LogOut } from 'lucide-react';
+import { CheckCircle2, Circle, XCircle, Flame, Shield, LogOut, Info, X, Sparkles, Trophy, PartyPopper, Share2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import Navbar from '@/components/Navbar';
+import PageHeader from '@/components/PageHeader';
+import StreakChip from '@/components/StreakChip';
+import { useCurrentTime, isWithin, toMinutes } from '@/lib/useCurrentTime';
+import { loadPrefs, requestPermission, scheduleAllBlockReminders, scheduleDailyStart, cancelAllBlockReminders } from '@/lib/reminders';
+import { OnboardingHint } from '@/components/OnboardingHint';
 
 type BlockType = 'work' | 'break' | 'movement' | 'reflection';
 
 type Block = {
-  id: string; // will be UUID from DB after load, or temp id before
-  db_id?: string; // real UUID
+  id: string;
+  db_id?: string;
   label: string;
   block_type: BlockType;
   start: string;
@@ -31,13 +36,18 @@ export default function DashboardPage() {
   const router = useRouter();
   const [blocks, setBlocks] = useState<Block[]>([]);
   const [streak, setStreak] = useState(0);
+  const [bestStreak, setBestStreak] = useState(0);
   const [timezone, setTimezone] = useState('');
   const [today, setToday] = useState('');
   const [userEmail, setUserEmail] = useState('');
-  const [userRole, setUserRole] = useState<string | null>(null);
+  const [cohort, setCohort] = useState<any>(null);
   const [loadingAuth, setLoadingAuth] = useState(true);
   const [loadingBlocks, setLoadingBlocks] = useState(true);
   const [userId, setUserId] = useState<string | null>(null);
+  const [helpOpen, setHelpOpen] = useState(false);
+  const [justCheckedId, setJustCheckedId] = useState<string | null>(null);
+
+  const now = useCurrentTime(60_000);
 
   useEffect(() => {
     setTimezone(Intl.DateTimeFormat().resolvedOptions().timeZone);
@@ -56,16 +66,39 @@ export default function DashboardPage() {
         setUserId(uid);
         if (session.user.email) setUserEmail(session.user.email);
 
-        // Role
-        const { data: profile } = await supabase.from('profiles').select('role').eq('id', uid).maybeSingle();
-        if (profile) setUserRole((profile as any).role);
+        // Role (loaded but not currently surfaced on dashboard; available for future use)
+        await supabase.from('profiles').select('role').eq('id', uid).maybeSingle();
+
+        // Active cohort (enrollment_open=true or current date in range)
+        const { data: cohortData } = await supabase
+          .from('cohorts')
+          .select('*')
+          .order('start_date', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (cohortData) setCohort(cohortData as any);
 
         // Streak
-        const { data: streakData } = await supabase.from('streaks').select('current_streak').eq('user_id', uid).maybeSingle();
-        if (streakData) setStreak((streakData as any).current_streak || 0);
+        const { data: streakData } = await supabase.from('streaks').select('current_streak, best_streak').eq('user_id', uid).maybeSingle();
+        if (streakData) {
+          setStreak((streakData as any).current_streak || 0);
+          setBestStreak((streakData as any).best_streak || 0);
+        }
 
         // Time blocks
         await loadOrCreateTimeBlocks(uid);
+
+        // Reminders: request permission once, then schedule today's blocks.
+        // Permission prompt is intentionally NOT auto-shown — user can enable via
+        // the bell in the nav. But we schedule if already granted.
+        if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+          const prefs = loadPrefs();
+          // Defer to next tick so the freshly-loaded blocks are in state
+          setTimeout(() => {
+            scheduleAllBlockReminders(blocks, prefs);
+            scheduleDailyStart(blocks, prefs);
+          }, 100);
+        }
 
       } catch (e) {
         console.error('Dashboard init error', e);
@@ -166,10 +199,14 @@ export default function DashboardPage() {
     const newBlocks = blocks.map(b => b.id === blockId ? { ...b, completed: newCompleted } : b);
     setBlocks(newBlocks);
 
+    if (newCompleted) {
+      setJustCheckedId(blockId);
+      setTimeout(() => setJustCheckedId(null), 1200);
+    }
+
     // Persist
     try {
       const realId = target.db_id || target.id;
-      // If it's still a temp id (no DB row yet), try to create time_blocks first
       if (!target.db_id && realId.startsWith('temp-')) {
         console.warn('Block has no DB id yet, cannot persist check-in');
         return;
@@ -185,15 +222,15 @@ export default function DashboardPage() {
         if (error) {
           console.warn('check_in upsert error:', error.message);
         } else {
-          // Optimistically bump streak if DB trigger will do real increment later
-          // We leave streak as is and re-fetch after a moment
           setTimeout(async () => {
-            const { data } = await supabase.from('streaks').select('current_streak').eq('user_id', userId).maybeSingle();
-            if (data) setStreak((data as any).current_streak || 0);
+            const { data } = await supabase.from('streaks').select('current_streak, best_streak').eq('user_id', userId).maybeSingle();
+            if (data) {
+              setStreak((data as any).current_streak || 0);
+              setBestStreak((data as any).best_streak || 0);
+            }
           }, 500);
         }
       } else {
-        // Uncheck -> delete check_in row
         const { error } = await supabase.from('check_ins').delete().eq('user_id', userId).eq('time_block_id', realId);
         if (error) console.warn('check_in delete error:', error.message);
       }
@@ -207,10 +244,66 @@ export default function DashboardPage() {
     window.location.href = '/auth/login';
   };
 
+  // Cohort day calculation. When no active cohort is loaded, the strip is hidden.
+  const cohortDayInfo = useMemo(() => {
+    if (!cohort || !cohort.start_date || !cohort.end_date) {
+      return { dayNumber: 0, isPreCohort: false, isPostCohort: false, daysUntilStart: 0, total: 0, hidden: true };
+    }
+    const start = new Date(`${cohort.start_date}T00:00:00Z`);
+    const end = new Date(`${cohort.end_date}T23:59:59Z`);
+    const now = new Date();
+    const totalMs = end.getTime() - start.getTime();
+    const total = Math.max(1, Math.round(totalMs / (1000 * 60 * 60 * 24)));
+    const diffDays = Math.floor((now.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
+    const dayNumber = diffDays + 1;
+    const isPreCohort = dayNumber < 1;
+    const isPostCohort = dayNumber > total;
+    const clampedDay = Math.max(1, Math.min(total, dayNumber));
+    const daysUntilStart = isPreCohort ? Math.ceil(-diffDays) : 0;
+    return { dayNumber: clampedDay, isPreCohort, isPostCohort, daysUntilStart, total, hidden: false };
+  }, [cohort]);
+
+  const completedCount = blocks.filter(b => b.completed).length;
+  const totalCount = blocks.length;
+  const allDone = totalCount > 0 && completedCount === totalCount;
+
+  // Find current / next block
+  const currentBlock = useMemo(() => {
+    return blocks.find(b => isWithin(now, b.start, b.end));
+  }, [blocks, now]);
+
+  const nextBlock = useMemo(() => {
+    const upcoming = blocks
+      .filter(b => toMinutes(b.start) > toMinutes(now))
+      .sort((a, b) => toMinutes(a.start) - toMinutes(b.start));
+    return upcoming[0];
+  }, [blocks, now]);
+
+  // Set of past (missed-eligible) block ids — time has passed and block not completed
+  const pastBlocks = useMemo(() => {
+    const past = new Set<string>();
+    blocks.forEach(b => {
+      if (!b.completed && toMinutes(now) > toMinutes(b.end)) past.add(b.id);
+    });
+    return past;
+  }, [blocks, now]);
+
+  // Re-schedule block reminders whenever the block list changes (after init).
+  useEffect(() => {
+    if (typeof Notification === 'undefined') return;
+    if (Notification.permission !== 'granted') return;
+    if (blocks.length === 0) return;
+    if (loadingBlocks) return;
+    const prefs = loadPrefs();
+    scheduleAllBlockReminders(blocks, prefs);
+    scheduleDailyStart(blocks, prefs);
+    return () => cancelAllBlockReminders();
+  }, [blocks, loadingBlocks]);
+
   if (loadingAuth) {
     return (
-      <main className="min-h-screen bg-[#0D0D0D] flex items-center justify-center">
-        <div className="text-neutral-500 text-sm animate-pulse">Loading...</div>
+      <main id="main-content" className="min-h-screen bg-[#0D0D0D] flex items-center justify-center">
+        <div className="text-neutral-500 text-sm animate-pulse">Loading…</div>
       </main>
     );
   }
@@ -219,91 +312,404 @@ export default function DashboardPage() {
     <>
       <Navbar />
       <main className="min-h-screen bg-[#0D0D0D] text-[#F2F2F2]">
-        <div className="max-w-3xl mx-auto px-6 pt-12 pb-20">
-          <header className="mb-10">
-            <div className="flex items-center justify-between mb-2">
-              <div>
-                <h1 className="text-3xl font-extrabold tracking-tighter">Daily Schedule</h1>
-                <p className="text-xs text-neutral-500 mt-1">{today} · {timezone} {userEmail && `· ${userEmail}`} {userRole && `· ${userRole}`}</p>
-              </div>
-              <div className="flex items-center gap-3">
-                <div className="text-right">
-                  <div className="text-[10px] text-neutral-500 uppercase tracking-wider">Streak</div>
-                  <div className="text-xl font-black text-amber-300 flex items-center gap-1.5">
-                    <Flame className="w-5 h-5" /> {streak}
-                  </div>
-                </div>
-                <button onClick={handleSignOut} className="ml-2 w-8 h-8 rounded-lg bg-neutral-900 border border-neutral-800 flex items-center justify-center hover:border-neutral-600 transition-colors" title="Sign out">
-                  <LogOut className="w-4 h-4 text-neutral-500" />
+        <div className="max-w-3xl mx-auto px-5 md:px-6 pt-8 md:pt-12 pb-24">
+          {/* Header row: title + streak + signout */}
+          <div className="flex items-start justify-between gap-4 mb-2">
+            <div className="min-w-0">
+              <div className="flex items-center gap-2 mb-1">
+                <h1 className="text-2xl md:text-3xl font-extrabold tracking-tighter text-white">Today</h1>
+                <button
+                  onClick={() => setHelpOpen(true)}
+                  className="w-6 h-6 rounded-full bg-neutral-900 border border-neutral-800 flex items-center justify-center text-neutral-500 hover:text-amber-300 hover:border-amber-500/30 transition-colors"
+                  aria-label="How the cohort works"
+                  title="How the cohort works"
+                >
+                  <Info className="w-3 h-3" />
                 </button>
               </div>
+              <p className="text-[11px] text-neutral-500 tracking-wide truncate">
+                {today}{timezone ? ` · ${timezone}` : ''}
+              </p>
             </div>
-            <div className="h-px bg-neutral-800 w-full" />
-          </header>
-
-          <div className="mb-8 rounded-xl bg-gradient-to-r from-amber-900/20 to-amber-950/20 border border-amber-900/20 p-5">
-            <div className="flex items-start gap-4">
-              <div className="w-10 h-10 rounded-full bg-amber-400/10 flex items-center justify-center shrink-0">
-                <Shield className="w-5 h-5 text-amber-400" />
-              </div>
-              <div>
-                <h3 className="font-extrabold text-sm mb-1">Accountability Active</h3>
-                <p className="text-xs text-neutral-400 leading-relaxed">
-                  You are in the active cohort{userRole === 'admin' ? ' (ADMIN MODE)' : ''}. Missing any block breaks your streak visibly. Your team and leaderboard will reflect it immediately. No excuses.
-                </p>
-              </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <div data-onboarding="streak"><StreakChip streak={streak} best={bestStreak} showBest={bestStreak > 0} /></div>
+              <button
+                onClick={handleSignOut}
+                className="w-9 h-9 rounded-lg bg-neutral-900 border border-neutral-800 flex items-center justify-center hover:border-neutral-600 transition-colors"
+                aria-label="Sign out"
+                title="Sign out"
+              >
+                <LogOut className="w-4 h-4 text-neutral-500" />
+              </button>
             </div>
           </div>
 
-          <section className="space-y-3">
-            <h2 className="text-[10px] font-extrabold text-neutral-500 uppercase tracking-[0.2em] mb-4">Today&apos;s Blocks {loadingBlocks && '(loading...)'}</h2>
-            {blocks.map((block) => (
-              <button
-                key={block.id}
-                onClick={() => handleCheckIn(block.id)}
-                className={`w-full text-left rounded-2xl border p-5 transition-all duration-300 group ${
-                  block.completed
-                    ? 'bg-amber-950/20 border-amber-800/40'
-                    : 'bg-[#121212] border-neutral-800 hover:border-neutral-600 hover:bg-[#151515]'
-                }`}
-              >
-                <div className="flex items-center justify-between mb-3">
-                  <div className="flex items-center gap-2.5">
-                    <div className={`w-2 h-2 rounded-full ${
-                      block.completed ? 'bg-amber-400 shadow-[0_0_8px_rgba(240,176,48,0.5)]' : 'bg-neutral-600'
-                    }`} />
-                    <span className="text-[10px] font-bold uppercase tracking-[0.15em] text-neutral-500">
-                      {block.block_type}
-                    </span>
-                  </div>
-                  <span className="text-xs font-mono text-neutral-500">{block.start} — {block.end}</span>
+          {/* Day X of 30 strip (demo mode only) */}
+          {!cohortDayInfo.hidden && !cohortDayInfo.isPreCohort && !cohortDayInfo.isPostCohort && (
+            <div className="mt-4 mb-6 rounded-xl border border-neutral-800 bg-[#121212]/50 p-4">
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] uppercase tracking-[0.2em] text-neutral-500 font-bold">Cohort Day</span>
+                  <span className="text-base font-extrabold text-amber-200">{cohortDayInfo.dayNumber} <span className="text-neutral-600 text-xs">of {cohortDayInfo.total}</span></span>
                 </div>
-                <h3 className={`text-base font-bold mb-1 ${block.completed ? 'text-amber-100' : 'text-white'}`}>
-                  {block.label}
-                </h3>
-                <div className="flex items-center gap-2 text-xs text-neutral-500">
-                  {block.completed ? (
-                    <span className="flex items-center gap-1.5 text-amber-300 font-semibold">
-                      <CheckCircle2 className="w-3.5 h-3.5" /> Completed — Streak Protected
-                    </span>
-                  ) : (
-                    <span className="flex items-center gap-1.5">
-                      <XCircle className="w-3.5 h-3.5" /> Click to confirm check-in
-                    </span>
-                  )}
-                </div>
-              </button>
-            ))}
-          </section>
+                <span className="text-[10px] text-neutral-500">{cohortDayInfo.total - cohortDayInfo.dayNumber} days remaining</span>
+              </div>
+              <div className="h-1.5 w-full bg-neutral-900 rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-gradient-to-r from-amber-500 to-amber-300 rounded-full transition-all duration-500"
+                  style={{ width: `${(cohortDayInfo.dayNumber / cohortDayInfo.total) * 100}%` }}
+                />
+              </div>
+            </div>
+          )}
 
-          <section className="mt-12 rounded-2xl border border-neutral-800 bg-[#121212]/30 p-6">
-            <h3 className="text-xs font-extrabold text-neutral-500 uppercase tracking-[0.2em] mb-3">Evidence-Based Structure</h3>
-            <p className="text-sm text-neutral-400 leading-relaxed">
-              Deep work blocks (90–180 min) align with ultradian rhythms. Protected breaks prevent decision fatigue. Movement resets cognition. Reflection encodes learning. This is not a template — it is the default contract.
-            </p>
-          </section>
+          {!cohortDayInfo.hidden && cohortDayInfo.isPreCohort && (
+            <div className="mt-4 mb-6 rounded-xl border border-amber-900/30 bg-amber-950/20 p-5">
+              <div className="flex items-start gap-3">
+                <div className="w-9 h-9 rounded-lg bg-amber-400/10 flex items-center justify-center shrink-0">
+                  <Flame className="w-4 h-4 text-amber-300" />
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-sm text-amber-100 mb-1">Cohort starts in {cohortDayInfo.daysUntilStart} day{cohortDayInfo.daysUntilStart === 1 ? '' : 's'}</h3>
+                  <p className="text-xs text-neutral-400 leading-relaxed">
+                    Here&apos;s a preview of your Day 1. Your first check-in unlocks at 06:00 local time.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Post-cohort celebration */}
+          {!cohortDayInfo.hidden && cohortDayInfo.isPostCohort && (
+            <CohortCompleteCard
+              streak={streak}
+              bestStreak={bestStreak}
+              totalDays={cohortDayInfo.total}
+            />
+          )}
+
+          {/* Primary CTA: the "now" question */}
+          {!cohortDayInfo.isPreCohort && !cohortDayInfo.isPostCohort && (
+            <div className="mb-6" data-onboarding="now">
+              {allDone ? (
+                <DayCompleteCard
+                  streak={streak}
+                  bestStreak={bestStreak}
+                  completedCount={completedCount}
+                />
+              ) : currentBlock ? (
+                <PrimaryNowCard
+                  block={currentBlock}
+                  onCheckIn={() => handleCheckIn(currentBlock.id)}
+                  justChecked={justCheckedId === currentBlock.id}
+                />
+              ) : nextBlock ? (
+                <PrimaryNextCard block={nextBlock} now={now} />
+              ) : (
+                <PrimaryEmptyCard />
+              )}
+            </div>
+          )}
+
+          {/* All blocks list — hidden in pre-cohort (Day 1 preview shown via strip above) */}
+          {!cohortDayInfo.isPreCohort && (
+            <section data-onboarding="blocks">
+              <div className="flex items-center justify-between mb-3">
+                <h2 className="text-[10px] font-extrabold text-neutral-500 uppercase tracking-[0.2em]">
+                  Today&apos;s blocks
+                </h2>
+                {!loadingBlocks && totalCount > 0 && (
+                  <span className="text-[10px] text-neutral-500">
+                    {completedCount} of {totalCount} done
+                  </span>
+                )}
+              </div>
+              {loadingBlocks ? (
+                <div className="text-sm text-neutral-500 animate-pulse">Loading blocks…</div>
+              ) : blocks.length === 0 ? (
+                <div className="rounded-xl border border-dashed border-neutral-800 bg-[#121212]/30 p-6 text-center">
+                  <p className="text-sm text-neutral-300 mb-1 font-semibold">No blocks set up yet</p>
+                  <p className="text-xs text-neutral-500">Your schedule will appear here once Day 1 begins.</p>
+                </div>
+              ) : (
+                <div className="space-y-2.5">
+                  {blocks.map((block) => (
+                    <BlockRow
+                      key={block.id}
+                      block={block}
+                      isCurrent={currentBlock?.id === block.id}
+                      isNext={nextBlock?.id === block.id}
+                      isPast={pastBlocks.has(block.id)}
+                      onCheckIn={() => handleCheckIn(block.id)}
+                      justChecked={justCheckedId === block.id}
+                    />
+                  ))}
+                </div>
+              )}
+            </section>
+          )}
         </div>
       </main>
+
+      <OnboardingHint />
+
+      {/* Help modal — replaces the static "Evidence-Based Structure" panel */}
+      {helpOpen && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[70] flex items-center justify-center p-5" onClick={() => setHelpOpen(false)}>
+          <div
+            className="max-w-lg w-full rounded-2xl border border-neutral-800 bg-[#121212] p-6 md:p-8 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start justify-between mb-4">
+              <div>
+                <p className="text-[10px] uppercase tracking-[0.2em] text-neutral-500 font-bold mb-1">How it works</p>
+                <h2 className="text-lg font-extrabold tracking-tight">Evidence-based structure</h2>
+              </div>
+              <button onClick={() => setHelpOpen(false)} className="w-8 h-8 rounded-lg bg-neutral-900 border border-neutral-800 flex items-center justify-center" aria-label="Close">
+                <X className="w-4 h-4 text-neutral-400" />
+              </button>
+            </div>
+            <div className="space-y-3 text-sm text-neutral-300 leading-relaxed">
+              <p>
+                <span className="text-amber-300 font-bold">Deep work blocks</span> (90–180 min) align with ultradian rhythms — the natural 90-minute focus cycles your brain runs on.
+              </p>
+              <p>
+                <span className="text-amber-300 font-bold">Protected breaks</span> prevent decision fatigue. Step away from the screen, walk, hydrate.
+              </p>
+              <p>
+                <span className="text-amber-300 font-bold">Movement</span> resets cognition. Even 20 minutes restores executive function.
+              </p>
+              <p>
+                <span className="text-amber-300 font-bold">Reflection</span> encodes learning. Write what shipped, what didn&apos;t, what changes tomorrow.
+              </p>
+              <p className="text-xs text-neutral-500 pt-2 border-t border-neutral-800">
+                This is not a template. It is the default contract of the cohort.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
     </>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Sub-components
+// ─────────────────────────────────────────────────────────────────────────────
+
+function PrimaryNowCard({ block, onCheckIn, justChecked }: { block: Block; onCheckIn: () => void; justChecked: boolean }) {
+  return (
+    <button
+      onClick={onCheckIn}
+      className={`w-full text-left rounded-2xl border p-5 md:p-6 transition-all ${
+        block.completed
+          ? 'bg-emerald-950/20 border-emerald-800/40'
+          : 'bg-gradient-to-br from-amber-500/15 to-amber-700/10 border-amber-500/40 hover:border-amber-400/60 shadow-lg shadow-amber-500/5'
+      }`}
+    >
+      <div className="flex items-center gap-2 mb-2">
+        <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-amber-400 text-black text-[10px] font-extrabold uppercase tracking-wider">
+          <span className="w-1.5 h-1.5 rounded-full bg-black animate-pulse" /> Now
+        </span>
+        <span className="text-[10px] uppercase tracking-[0.2em] text-neutral-400 font-bold">
+          {block.start} — {block.end}
+        </span>
+      </div>
+      <div className="flex items-center justify-between gap-3">
+        <h3 className={`text-lg md:text-xl font-extrabold tracking-tight ${block.completed ? 'text-emerald-200' : 'text-white'}`}>
+          {block.label}
+        </h3>
+        {block.completed ? (
+          <span className="text-emerald-300"><CheckCircle2 className="w-6 h-6" strokeWidth={2.2} /></span>
+        ) : (
+          <span className={`text-amber-300 text-xs font-bold uppercase tracking-wider ${justChecked ? 'opacity-0' : 'opacity-100'} transition-opacity`}>
+            Check in →
+          </span>
+        )}
+      </div>
+    </button>
+  );
+}
+
+function PrimaryNextCard({ block, now }: { block: Block; now: string }) {
+  const minutesUntil = toMinutes(block.start) - toMinutes(now);
+  const hours = Math.floor(minutesUntil / 60);
+  const mins = minutesUntil % 60;
+  const countdown = hours > 0 ? `in ${hours}h ${mins}m` : `in ${mins}m`;
+
+  return (
+    <div className="w-full text-left rounded-2xl border border-neutral-800 bg-[#121212]/60 p-5 md:p-6">
+      <div className="flex items-center gap-2 mb-2">
+        <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-neutral-800 text-neutral-300 text-[10px] font-extrabold uppercase tracking-wider">
+          Next up
+        </span>
+        <span className="text-[10px] uppercase tracking-[0.2em] text-neutral-500 font-bold">
+          {block.start} — {block.end} · {countdown}
+        </span>
+      </div>
+      <h3 className="text-lg md:text-xl font-extrabold tracking-tight text-white">{block.label}</h3>
+    </div>
+  );
+}
+
+function PrimaryEmptyCard() {
+  return (
+    <div className="w-full text-left rounded-2xl border border-neutral-800 bg-[#121212]/60 p-5 md:p-6">
+      <div className="flex items-center gap-2 mb-2">
+        <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-neutral-800 text-neutral-400 text-[10px] font-extrabold uppercase tracking-wider">
+          All blocks done
+        </span>
+      </div>
+      <h3 className="text-lg font-extrabold tracking-tight text-white">You&apos;re ahead of the day.</h3>
+    </div>
+  );
+}
+
+function CohortCompleteCard({ streak, bestStreak, totalDays }: { streak: number; bestStreak: number; totalDays: number }) {
+  const handleShare = async () => {
+    const text = `I just completed the ${totalDays}-day Discipline Cohort. ${streak > 0 ? `${streak}-day streak.` : 'In the books.'} 30 days. Visible streaks. Teams of 3. The contract.`;
+    const shareData = { title: 'Discipline Cohort Complete', text };
+    try {
+      const nav: any = typeof navigator !== 'undefined' ? navigator : null;
+      if (nav && typeof nav.share === 'function') {
+        await nav.share(shareData);
+      } else if (nav && nav.clipboard) {
+        await nav.clipboard.writeText(text);
+        alert('Copied to clipboard.');
+      }
+    } catch {
+      // user cancelled
+    }
+  };
+
+  return (
+    <div className="w-full text-left rounded-2xl border border-amber-500/40 bg-gradient-to-br from-amber-950/40 via-amber-900/20 to-amber-950/10 p-6 md:p-10 shadow-2xl shadow-amber-500/5">
+      <div className="flex items-center gap-2 mb-4">
+        <div className="w-10 h-10 rounded-full bg-amber-400/20 flex items-center justify-center">
+          <PartyPopper className="w-5 h-5 text-amber-300" />
+        </div>
+        <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-amber-500/30 text-amber-100 text-[10px] font-extrabold uppercase tracking-wider">
+          Cohort Complete
+        </span>
+      </div>
+      <h2 className="text-3xl md:text-5xl font-extrabold tracking-tighter text-amber-100 mb-3 leading-[0.95]">
+        You did it.
+      </h2>
+      <p className="text-base text-amber-200/80 mb-6 max-w-md leading-relaxed">
+        {totalDays} days. The contract is closed. You shipped, you showed up, your team saw everything. That&apos;s the product.
+      </p>
+      <div className="grid grid-cols-2 gap-3 mb-6 max-w-sm">
+        <div className="rounded-xl bg-black/30 border border-amber-500/20 p-4">
+          <p className="text-[10px] uppercase tracking-[0.2em] text-amber-300/70 font-bold">Final streak</p>
+          <p className="text-2xl font-black text-amber-100 mt-1">{streak}</p>
+        </div>
+        <div className="rounded-xl bg-black/30 border border-amber-500/20 p-4">
+          <p className="text-[10px] uppercase tracking-[0.2em] text-amber-300/70 font-bold">Best streak</p>
+          <p className="text-2xl font-black text-amber-100 mt-1">{bestStreak}</p>
+        </div>
+      </div>
+      <button
+        onClick={handleShare}
+        className="inline-flex items-center gap-2 h-11 px-5 rounded-xl bg-amber-400 text-black font-extrabold text-sm hover:bg-amber-300 transition-colors"
+      >
+        <Share2 className="w-4 h-4" /> Share your completion
+      </button>
+    </div>
+  );
+}
+
+function DayCompleteCard({ streak, bestStreak, completedCount }: { streak: number; bestStreak: number; completedCount: number }) {
+  return (
+    <div className="w-full text-left rounded-2xl border border-emerald-700/40 bg-gradient-to-br from-emerald-950/30 to-emerald-900/10 p-6 md:p-8">
+      <div className="flex items-center gap-2 mb-3">
+        <div className="w-8 h-8 rounded-full bg-emerald-500/20 flex items-center justify-center">
+          <Sparkles className="w-4 h-4 text-emerald-300" />
+        </div>
+        <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-emerald-500/20 text-emerald-200 text-[10px] font-extrabold uppercase tracking-wider">
+          Day complete
+        </span>
+      </div>
+      <h3 className="text-2xl md:text-3xl font-extrabold tracking-tighter text-emerald-100 mb-1">
+        All {completedCount} blocks done.
+      </h3>
+      <p className="text-sm text-emerald-200/80 mb-4">
+        Streak protected. {streak > 0 ? `${streak} day${streak === 1 ? '' : 's'} and counting.` : 'A new streak begins tomorrow.'}
+      </p>
+      {bestStreak > 0 && (
+        <div className="inline-flex items-center gap-2 text-xs text-emerald-300/80">
+          <Trophy className="w-3.5 h-3.5" />
+          <span>Best streak: {bestStreak} days</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function BlockRow({ block, isCurrent, isNext, isPast, onCheckIn, justChecked }: {
+  block: Block;
+  isCurrent: boolean;
+  isNext: boolean;
+  isPast: boolean;
+  onCheckIn: () => void;
+  justChecked: boolean;
+}) {
+  const typeColor: Record<BlockType, string> = {
+    work: 'text-amber-300',
+    break: 'text-sky-300',
+    movement: 'text-emerald-300',
+    reflection: 'text-violet-300',
+  };
+
+  const isMissed = isPast && !block.completed;
+
+  return (
+    <button
+      onClick={onCheckIn}
+      className={`w-full text-left rounded-xl border p-4 transition-all ${
+        block.completed
+          ? 'bg-emerald-950/15 border-emerald-800/30'
+          : isCurrent
+          ? 'bg-amber-950/15 border-amber-700/40'
+          : isMissed
+          ? 'bg-red-950/10 border-red-900/30 opacity-70'
+          : 'bg-[#121212] border-neutral-800 hover:border-neutral-700'
+      }`}
+    >
+      <div className="flex items-center justify-between gap-3 mb-1.5">
+        <div className="flex items-center gap-2 min-w-0">
+          {block.completed ? (
+            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" strokeWidth={2.2} />
+          ) : isMissed ? (
+            <XCircle className="w-3.5 h-3.5 text-red-400 shrink-0" strokeWidth={2.2} />
+          ) : (
+            <Circle className="w-3.5 h-3.5 text-neutral-700 shrink-0" />
+          )}
+          <span className={`text-[10px] font-bold uppercase tracking-[0.15em] ${typeColor[block.block_type] || 'text-neutral-500'}`}>
+            {block.block_type}
+          </span>
+          {isCurrent && !block.completed && (
+            <span className="text-[9px] font-bold uppercase tracking-wider text-amber-300 bg-amber-500/15 px-1.5 py-0.5 rounded">
+              Live
+            </span>
+          )}
+          {isNext && !block.completed && !isCurrent && (
+            <span className="text-[9px] font-bold uppercase tracking-wider text-neutral-400 bg-neutral-800 px-1.5 py-0.5 rounded">
+              Next
+            </span>
+          )}
+          {isMissed && (
+            <span className="text-[9px] font-bold uppercase tracking-wider text-red-300 bg-red-500/15 px-1.5 py-0.5 rounded">
+              Missed
+            </span>
+          )}
+        </div>
+        <span className="text-[11px] font-mono text-neutral-500 shrink-0">{block.start} — {block.end}</span>
+      </div>
+      <h3 className={`text-sm font-bold ${block.completed ? 'text-emerald-100' : isMissed ? 'text-red-200/80' : 'text-white'}`}>
+        {block.label}
+        {justChecked && <span className="ml-2 text-emerald-300 text-xs">✓ Saved</span>}
+        {isMissed && !justChecked && <span className="ml-2 text-red-300/70 text-xs font-normal">· Tap to check in late</span>}
+      </h3>
+    </button>
   );
 }

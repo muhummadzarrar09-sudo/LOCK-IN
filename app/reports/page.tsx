@@ -1,8 +1,11 @@
 "use client";
-import { useEffect, useState } from 'react';
-import { FileText } from 'lucide-react';
+import { useEffect, useState, useMemo } from 'react';
+import { FileText, WifiOff, Clock, X, Search } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import Navbar from '@/components/Navbar';
+import PageHeader from '@/components/PageHeader';
+import EmptyState from '@/components/EmptyState';
+import { SkeletonList } from '@/components/Skeleton';
 
 type Report = {
   id: string;
@@ -11,96 +14,153 @@ type Report = {
   created_at: string;
 };
 
+function reportType(title: string): string {
+  const t = title.toLowerCase();
+  if (t.includes('interview') || t.includes('conversation')) return 'INTERVIEW';
+  if (t.includes('protocol') || t.includes('framework') || t.includes('manifesto') || t.includes('guide')) return 'FRAMEWORK';
+  if (t.includes('outperform') || t.includes('case') || t.includes('data')) return 'CASE STUDY';
+  return 'FRAMEWORK';
+}
+
+function readingTime(body: string): string {
+  const words = body.split(/\s+/).length;
+  const min = Math.max(1, Math.round(words / 220));
+  return `${min} min read`;
+}
+
 export default function ReportsPage() {
   const [reports, setReports] = useState<Report[]>([]);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<Report | null>(null);
+  const [query, setQuery] = useState('');
 
   useEffect(() => {
     const load = async () => {
-      const { data, error } = await supabase.from('reports').select('*').order('created_at', { ascending: false }).limit(20);
+      const { data, error } = await supabase.from('reports').select('*').order('created_at', { ascending: false }).limit(50);
       if (!error && data) setReports(data as any);
       setLoading(false);
     };
     load();
   }, []);
 
+  const filtered = useMemo(() => {
+    if (!query.trim()) return reports;
+    const q = query.toLowerCase();
+    return reports.filter(r =>
+      r.title.toLowerCase().includes(q) || r.body.toLowerCase().includes(q)
+    );
+  }, [reports, query]);
+
   return (
     <>
       <Navbar />
-      <main className="min-h-screen bg-[#0D0D0D] px-6 pt-12 pb-20 text-white">
+      <main id="main-content" className="min-h-screen bg-[#0D0D0D] px-5 md:px-6 pt-8 md:pt-12 pb-24 text-white">
         <div className="max-w-3xl mx-auto">
-          <div className="flex items-center gap-3 mb-8">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-400 to-amber-600 flex items-center justify-center">
-              <FileText className="w-5 h-5 text-black" />
-            </div>
-            <div>
-              <h1 className="text-2xl font-extrabold tracking-tighter">Reports</h1>
-              <p className="text-[10px] text-neutral-500">Admin curated · Cached for offline</p>
-            </div>
-          </div>
+          <PageHeader
+            icon={FileText}
+            title="Reports"
+            subtitle="Curated by your cohort lead · Available offline"
+          />
 
-          {loading ? (
-            <div className="text-sm text-neutral-500 animate-pulse">Loading reports...</div>
-          ) : reports.length === 0 ? (
-            <div className="space-y-4">
-              <div className="rounded-2xl border border-dashed border-neutral-800 bg-[#121212]/30 p-8 text-center">
-                <p className="text-sm text-neutral-400 mb-2">No reports yet in Supabase</p>
-                <p className="text-xs text-neutral-600">Seed example: INSERT INTO reports(title,body) VALUES('Interview Report: Wealth Discipline','...')</p>
-              </div>
-              {/* Fallback static demo content */}
-              {[
-                { title: 'Interview Report: Wealth Discipline (Jul 2026)', date: 'Jul 20', body: 'Wealth discipline requires time-boxed deep work...' },
-                { title: 'Presentation: The 90-Minute Deep Work Protocol', date: 'Jul 18', body: 'Ultradian rhythm aligned work blocks...' },
-                { title: 'Interview: Building Teams That Hold You Accountable', date: 'Jul 15', body: 'Accountability teams of 3-4 outperform solo...' },
-              ].map((r) => (
-                <div key={r.title} className="block rounded-2xl border border-neutral-800 bg-[#121212]/60 p-6">
-                  <div className="flex items-start justify-between mb-2">
-                    <h3 className="text-sm font-extrabold">{r.title}</h3>
-                    <span className="text-[10px] text-neutral-600 font-mono">{r.date}</span>
-                  </div>
-                  <p className="text-xs text-neutral-400 mb-3">{r.body}</p>
-                  <div className="flex items-center gap-2 text-[10px] text-neutral-500">
-                    <span className="px-1.5 py-0.5 rounded bg-neutral-900 text-neutral-400">CACHED</span>
-                    <span>Available offline (demo)</span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="space-y-4">
-              {reports.map((r) => (
-                <button
-                  key={r.id}
-                  onClick={() => setSelected(r)}
-                  className="block w-full text-left rounded-2xl border border-neutral-800 bg-[#121212]/60 p-6 hover:border-neutral-600 transition-colors group"
-                >
-                  <div className="flex items-start justify-between mb-2">
-                    <h3 className="text-sm font-extrabold group-hover:text-amber-200 transition-colors">{r.title}</h3>
-                    <span className="text-[10px] text-neutral-600 font-mono">{new Date(r.created_at).toLocaleDateString()}</span>
-                  </div>
-                  <p className="text-xs text-neutral-500 line-clamp-2">{r.body.slice(0,120)}...</p>
-                  <div className="flex items-center gap-2 text-[10px] text-neutral-500 mt-2">
-                    <span className="px-1.5 py-0.5 rounded bg-neutral-900 text-neutral-400">CACHED</span>
-                    <span>Available offline</span>
-                  </div>
-                </button>
-              ))}
+          {reports.length > 0 && (
+            <div className="mb-5 relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-500 pointer-events-none" />
+              <input
+                type="search"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Search reports…"
+                className="w-full h-10 pl-10 pr-4 rounded-lg bg-neutral-900/60 border border-neutral-800 text-sm text-white placeholder-neutral-500 focus:outline-none focus:border-amber-500/60 focus:ring-1 focus:ring-amber-500/20 transition-all"
+              />
             </div>
           )}
 
-          {selected && (
-            <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-6" onClick={() => setSelected(null)}>
-              <div className="max-w-2xl w-full rounded-2xl border border-neutral-800 bg-[#121212] p-8" onClick={e => e.stopPropagation()}>
-                <h2 className="text-lg font-bold mb-2">{selected.title}</h2>
-                <p className="text-xs text-neutral-500 mb-4">{new Date(selected.created_at).toLocaleString()}</p>
-                <p className="text-sm text-neutral-300 leading-relaxed whitespace-pre-wrap">{selected.body}</p>
-                <button onClick={() => setSelected(null)} className="mt-6 h-9 px-4 rounded-lg bg-neutral-900 border border-neutral-800 text-xs text-white">Close</button>
-              </div>
+          {loading ? (
+            <SkeletonList rows={3} />
+          ) : reports.length === 0 ? (
+            <EmptyState
+              icon={FileText}
+              title="No reports published yet"
+              description="Your cohort lead will publish reports here. They'll be cached for offline reading once they arrive."
+            />
+          ) : filtered.length === 0 ? (
+            <div className="rounded-2xl border border-neutral-800 bg-[#121212]/60 p-8 text-center">
+              <p className="text-sm text-neutral-300 mb-1 font-semibold">No reports match &ldquo;{query}&rdquo;</p>
+              <p className="text-xs text-neutral-500">Try a different search term.</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {filtered.map((r) => {
+                const type = reportType(r.title);
+                return (
+                  <button
+                    key={r.id}
+                    onClick={() => setSelected(r)}
+                    className="block w-full text-left rounded-2xl border border-neutral-800 bg-[#121212]/60 p-5 md:p-6 hover:border-amber-500/30 hover:bg-[#161616] transition-all group"
+                  >
+                    <div className="flex items-start justify-between gap-3 mb-2">
+                      <span className="text-[9px] font-extrabold tracking-[0.2em] text-amber-300 uppercase">{type}</span>
+                      <span className="text-[10px] text-neutral-500 inline-flex items-center gap-1 shrink-0">
+                        <Clock className="w-2.5 h-2.5" /> {readingTime(r.body)}
+                      </span>
+                    </div>
+                    <h3 className="text-base font-extrabold text-white group-hover:text-amber-200 transition-colors mb-2 leading-tight">
+                      {r.title}
+                    </h3>
+                    <p className="text-xs text-neutral-400 leading-relaxed line-clamp-2 mb-3">
+                      {r.body.slice(0, 160)}…
+                    </p>
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] text-neutral-600 font-mono">
+                        {new Date(r.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                      </span>
+                      <span className="inline-flex items-center gap-1.5 text-[10px] text-emerald-300/80 font-semibold">
+                        <WifiOff className="w-3 h-3" /> Available offline
+                      </span>
+                    </div>
+                  </button>
+                );
+              })}
             </div>
           )}
         </div>
       </main>
+
+      {selected && (
+        <div
+          className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[70] flex items-center justify-center p-5"
+          onClick={() => setSelected(null)}
+          role="dialog"
+          aria-modal="true"
+        >
+          <div
+            className="max-w-2xl w-full max-h-[85vh] overflow-y-auto rounded-2xl border border-neutral-800 bg-[#121212] p-6 md:p-8 shadow-2xl fade-in-up"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-3 mb-4">
+              <div className="min-w-0">
+                <span className="text-[9px] font-extrabold tracking-[0.2em] text-amber-300 uppercase">{reportType(selected.title)}</span>
+                <h2 className="text-xl md:text-2xl font-extrabold tracking-tight mt-1 leading-tight">{selected.title}</h2>
+                <div className="flex items-center gap-3 mt-2 text-[10px] text-neutral-500">
+                  <span>{new Date(selected.created_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</span>
+                  <span>·</span>
+                  <span>{readingTime(selected.body)}</span>
+                </div>
+              </div>
+              <button
+                onClick={() => setSelected(null)}
+                className="w-8 h-8 shrink-0 rounded-lg bg-neutral-900 border border-neutral-800 flex items-center justify-center hover:border-neutral-600"
+                aria-label="Close"
+              >
+                <X className="w-4 h-4 text-neutral-400" />
+              </button>
+            </div>
+            <div className="border-t border-neutral-800 pt-4 text-sm text-neutral-200 leading-relaxed whitespace-pre-wrap">
+              {selected.body}
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }

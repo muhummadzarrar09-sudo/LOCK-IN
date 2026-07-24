@@ -5,6 +5,9 @@ import { cookies } from 'next/headers';
 export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url);
   const code = searchParams.get('code');
+  // Default to /dashboard to preserve the existing verified flow (the 6-day auth fight).
+  // Supabase recovery emails carry ?type=recovery in the link, but the code exchange
+  // is the same. Callers wanting a custom destination pass ?next=.
   const next = searchParams.get('next') ?? '/dashboard';
 
   if (code) {

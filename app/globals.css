@@ -4,20 +4,45 @@
   --font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif;
   --font-serif: 'Instrument Serif', Georgia, serif;
 
+  /* ── Surface tokens ── */
   --color-ink: #0D0D0D;
   --color-paper: #121212;
   --color-surface: #161616;
   --color-border-subtle: #222222;
   --color-border-default: #2A2A2A;
+  --color-border-strong: #3A3A3A;
+
+  /* ── Text tokens ── */
   --color-text-primary: #F2F2F2;
   --color-text-secondary: #A0A0A0;
   --color-text-muted: #5A5A5A;
+  --color-text-disabled: #404040;
+
+  /* ── Brand (amber) ── */
   --color-amber: #F0B030;
   --color-amber-glow: #F5C65A;
   --color-amber-dim: #8A6A20;
-  --color-success: #3BA876;
-  --color-danger: #E05A5A;
-  --color-warning: #F0B030;
+
+  /* ── Semantic state colors ── */
+  --color-success: #3BA876;        /* confirmed / completed / "live" positive */
+  --color-success-fg: #6FCF9C;     /* foreground on dark surfaces */
+  --color-success-bg: #0E2A1F;     /* background tints */
+  --color-success-border: #1F4A38;
+
+  --color-danger: #E05A5A;         /* error / failure */
+  --color-danger-fg: #F08080;      /* foreground on dark surfaces */
+  --color-danger-bg: #2A1414;      /* background tints */
+  --color-danger-border: #4A1F1F;
+
+  --color-info: #5BA8E0;           /* informational (links, secondary actions) */
+  --color-info-fg: #87C5ED;
+  --color-info-bg: #14222A;
+  --color-info-border: #1F3D4A;
+
+  --color-warning: #E0A030;        /* warning (distinct from amber) */
+  --color-warning-fg: #F5C272;
+  --color-warning-bg: #2A1F0E;
+  --color-warning-border: #4A381F;
 }
 
 html, body {
@@ -26,6 +51,7 @@ html, body {
   font-family: 'Inter', ui-sans-serif, system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  scroll-padding-top: 5rem;
 }
 
 ::selection {
@@ -34,19 +60,106 @@ html, body {
 }
 
 /* Premium scrollbar */
-::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: #2A2A2A; border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: #3A3A3A; }
 
-/* Custom utilities */
+/* ── Custom utilities ── */
 @layer utilities {
-  .text-balance {
-    text-wrap: balance;
+  .text-balance { text-wrap: balance; }
+  .line-clamp-2 {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
   }
+  .line-clamp-3 {
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  /* Glass panel */
   .glass-panel {
     background: rgba(18, 18, 18, 0.7);
     backdrop-filter: blur(20px) saturate(1.1);
     border: 1px solid rgba(42, 42, 42, 0.6);
   }
+
+  /* Shimmer skeleton */
+  .skeleton {
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.04), transparent);
+    background-size: 200% 100%;
+    animation: shimmer 1.8s ease-in-out infinite;
+    background-color: #161616;
+    border-radius: 4px;
+  }
+}
+
+/* ── Animations ── */
+@keyframes slide-in-from-right {
+  from { transform: translateX(100%); }
+  to   { transform: translateX(0); }
+}
+.drawer-slide-in {
+  animation: slide-in-from-right 220ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes fade-in-up {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.fade-in-up {
+  animation: fade-in-up 280ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes shimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .drawer-slide-in,
+  .fade-in-up,
+  .skeleton {
+    animation: none;
+  }
+}
+
+/* ── Global focus-visible (a11y) ── */
+:focus-visible {
+  outline: 2px solid rgba(240, 176, 48, 0.6);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+:focus:not(:focus-visible) {
+  outline: none;
+}
+
+/* Skip-to-content (a11y) */
+.skip-to-content {
+  position: absolute;
+  top: -100px;
+  left: 1rem;
+  z-index: 100;
+  padding: 0.5rem 1rem;
+  background: #F0B030;
+  color: #000;
+  font-weight: 800;
+  font-size: 0.875rem;
+  border-radius: 0.5rem;
+  transition: top 150ms ease;
+}
+.skip-to-content:focus {
+  top: 1rem;
+}
+
+/* Print styles (clean print of dashboard) */
+@media print {
+  body { background: white; color: black; }
+  nav, .no-print { display: none !important; }
+  .print-block { page-break-inside: avoid; }
 }
