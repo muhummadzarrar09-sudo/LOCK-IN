@@ -2,7 +2,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
-import { Shield, Trophy, Users, FileText, MessageCircle, Settings, LogOut, Menu, X, Sliders, LifeBuoy } from 'lucide-react';
+import { Shield, Trophy, Users, FileText, MessageCircle, Settings, LogOut, Menu, X, Sliders, LifeBuoy, Search } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { NotificationBell } from './NotificationBell';
 
@@ -105,6 +105,18 @@ export default function Navbar() {
                 </Link>
               );
             })}
+            <button
+              onClick={() => {
+                // Open the command palette via a custom event the palette listens for
+                window.dispatchEvent(new CustomEvent('discipline:openCommandPalette'));
+              }}
+              className="ml-1 h-9 px-2.5 inline-flex items-center gap-1.5 rounded-lg bg-neutral-900 border border-neutral-800 text-[11px] font-semibold text-neutral-400 hover:border-amber-500/30 hover:text-amber-300 transition-colors"
+              title="Search anything (⌘K)"
+              aria-label="Search anything"
+            >
+              <Search className="w-3.5 h-3.5" />
+              <kbd className="hidden lg:inline px-1.5 py-0.5 rounded text-[9px] font-mono bg-neutral-800 border border-neutral-700 text-neutral-500">⌘K</kbd>
+            </button>
             <div className="ml-1"><NotificationBell userId={userId} /></div>
             <button
               onClick={handleSignOut}
@@ -115,8 +127,17 @@ export default function Navbar() {
             </button>
           </div>
 
-          {/* Mobile: hamburger */}
+          {/* Mobile: hamburger + search */}
           <div className="md:hidden flex items-center gap-2">
+            <button
+              onClick={() => {
+                window.dispatchEvent(new CustomEvent('discipline:openCommandPalette'));
+              }}
+              className="w-9 h-9 rounded-lg bg-neutral-900 border border-neutral-800 flex items-center justify-center hover:border-amber-500/30 transition-colors"
+              aria-label="Search (⌘K)"
+            >
+              <Search className="w-4 h-4 text-neutral-300" />
+            </button>
             <button
               onClick={() => setMobileOpen(true)}
               className="w-9 h-9 rounded-lg bg-neutral-900 border border-neutral-800 flex items-center justify-center hover:border-neutral-600 transition-colors"

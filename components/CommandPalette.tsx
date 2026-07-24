@@ -48,8 +48,13 @@ export function CommandPalette() {
         setOpen(false);
       }
     };
+    const onOpenEvent = () => setOpen(true);
     window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+    window.addEventListener('discipline:openCommandPalette', onOpenEvent);
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      window.removeEventListener('discipline:openCommandPalette', onOpenEvent);
+    };
   }, [open]);
 
   // Reset on open

@@ -11,6 +11,7 @@ import { loadPrefs, requestPermission, scheduleAllBlockReminders, scheduleDailyS
 import { OnboardingHint } from '@/components/OnboardingHint';
 import { StreakFreezeBanner } from '@/components/StreakFreezeBanner';
 import { AchievementCelebration } from '@/components/AchievementCelebration';
+import { DashboardTeamPulse } from '@/components/DashboardTeamPulse';
 import { ACHIEVEMENTS, AchievementCode, getAchievement } from '@/lib/achievements';
 
 type BlockType = 'work' | 'break' | 'movement' | 'reflection';
@@ -50,6 +51,8 @@ export default function DashboardPage() {
   const [helpOpen, setHelpOpen] = useState(false);
   const [justCheckedId, setJustCheckedId] = useState<string | null>(null);
   const [celebrateCode, setCelebrateCode] = useState<AchievementCode | null>(null);
+  const [myTeamIds, setMyTeamIds] = useState<string[]>([]);
+  const [myTeamName, setMyTeamName] = useState<string | null>(null);
   // Snapshot of earned achievements, taken right after a check-in.
   // Used to diff against the previous snapshot to detect NEW achievements.
   const earnedBeforeRef = useRef<Set<string>>(new Set());
@@ -95,6 +98,22 @@ export default function DashboardPage() {
         // Snapshot earned achievements — used to detect a NEW unlock on check-in
         const { data: earned } = await supabase.from('achievements').select('code').eq('user_id', uid);
         earnedBeforeRef.current = new Set((earned || []).map((a: any) => a.code));
+
+        // Load team memberships for the team pulse card
+        const { data: myMemberships } = await supabase
+          .from('team_members')
+          .select('team_id')
+          .eq('user_id', uid);
+        const teamIds = (myMemberships || []).map((m: any) => m.team_id);
+        setMyTeamIds(teamIds);
+        if (teamIds.length > 0) {
+          const { data: myTeam } = await supabase
+            .from('teams')
+            .select('name')
+            .eq('id', teamIds[0])
+            .maybeSingle();
+          if (myTeam) setMyTeamName((myTeam as any).name);
+        }
 
         // Time blocks
         await loadOrCreateTimeBlocks(uid);
@@ -476,6 +495,13 @@ export default function DashboardPage() {
               )}
             </section>
           )}
+
+          {/* Team pulse — only renders if user is on a team with posts */}
+          <DashboardTeamPulse
+            userId={userId || ''}
+            teamIds={myTeamIds}
+            teamName={myTeamName || undefined}
+          />
         </div>
       </main>
 
