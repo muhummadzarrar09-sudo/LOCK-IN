@@ -62,12 +62,31 @@ CREATE POLICY "Streak freezes: user can read own" ON streak_freezes
   FOR SELECT USING (auth.uid() = user_id);
 
 -- ── Full-text search on profiles ─────────────────────────────────────
--- GIN index for fast username search
-CREATE INDEX IF NOT EXISTS idx_profiles_username_trgm
-  ON profiles USING gin (username gin_trgm);
+-- GIN index for fast username search.
+-- Wrapped in DO block so if pg_trgm isn't installed, the rest of the
+-- migration still runs. Username search falls back to plain ilike
+-- (slower at scale, fine for thousands and fine for demo).
+DO $$
+BEGIN
+  BEGIN
+    CREATE INDEX IF NOT EXISTS idx_profiles_username_trgm
+      ON profiles USING gin (username gin_trgm);
+  EXCEPTION WHEN OTHERS THEN
+    RAISE NOTICE 'Skipping idx_profiles_username_trgm (pg_trgm not available)';
+  END;
+END$$;
 
--- Required extension (may already be enabled)
-CREATE EXTENSION IF NOT EXISTS pg_trgm;
+-- Required extension (may already be enabled).
+-- Wrapped in DO block so if pg_trgm is unavailable, we skip gracefully
+-- instead of crashing the whole migration.
+DO $$
+BEGIN
+  BEGIN
+    CREATE EXTENSION IF NOT EXISTS pg_trgm;
+  EXCEPTION WHEN OTHERS THEN
+    RAISE NOTICE 'pg_trgm extension unavailable, skipping trigram index';
+  END;
+END$$;
 
 -- ── Active daily helper (for cohort analytics) ──────────────────────
 -- View: for each day in the cohort, count distinct users who checked in.
