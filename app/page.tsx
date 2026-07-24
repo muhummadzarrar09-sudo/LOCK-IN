@@ -22,6 +22,9 @@ export default function HomePage() {
             </div>
           </div>
           <div className="flex items-center gap-2 md:gap-3">
+            <Link href="/whats-new" className="hidden md:inline-flex h-9 px-3 items-center text-[11px] font-bold uppercase tracking-wider text-amber-300/80 hover:text-amber-200 transition-colors">
+              What\u2019s new
+            </Link>
             <Link href="/auth/login" className="h-9 px-3 md:px-4 inline-flex items-center text-[11px] font-bold uppercase tracking-wider text-neutral-400 hover:text-white transition-colors">
               Sign in
             </Link>
@@ -41,7 +44,7 @@ export default function HomePage() {
 
         <div className="max-w-4xl mx-auto relative z-10">
           <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-amber-900/20 border border-amber-900/30 text-amber-300 text-[10px] font-extrabold tracking-[0.2em] uppercase mb-8">
-            <Zap className="w-3 h-3" /> 30-Day Cohort — Enrollment Open
+            <Zap className="w-3 h-3" /> 30-Day Cohort — MVP Ready
           </div>
 
           <p className="text-amber-300/90 text-sm md:text-base font-semibold tracking-wide mb-4 uppercase text-[11px]">
