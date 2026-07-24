@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
 import { Users, Clock, ArrowRight } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
-import { useRealtimeTableIn } from '@/lib/realtime';
+import { useRealtimeEvent } from './CohortRealtime';
 import { useToast } from './Toast';
 import { initials, relativeTime } from '@/lib/ui';
 import { FreshnessDot } from './FreshnessDot';
@@ -66,31 +66,11 @@ export function DashboardTeamPulse({ userId, teamIds, teamName }: Props) {
 
   useEffect(() => { load(); }, [load]);
 
-  // Real-time: toast when a teammate posts (skip own posts)
-  useRealtimeTableIn(
-    'team_startup_log',
-    'INSERT',
-    'team_id',
-    teamIds,
-    async (payload: any) => {
-      const newRow = payload?.new;
-      if (!newRow) return;
-      if (newRow.user_id === userId) return; // skip self
-      if (seenIdsRef.has(newRow.id)) return;
-      seenIdsRef.add(newRow.id);
-      // Look up the poster's username for the toast
-      const { data: prof } = await supabase
-        .from('profiles')
-        .select('username')
-        .eq('id', newRow.user_id)
-        .maybeSingle();
-      const who = (prof as any)?.username || 'Teammate';
-      toast.info(`${who} just shipped an update`);
-      // Refresh the list
-      load();
-    },
-    [load, userId]
-  );
+  // Real-time: refresh team feed when teammates post. The toast fan-out
+  // for new team posts is handled by GlobalRealtimeToaster (single shared
+  // channel via CohortRealtimeProvider) — we just listen for the event
+  // here to refresh the list.
+  useRealtimeEvent('team', () => load(), teamIds.length > 0);
 
   if (teamIds.length === 0) return null;
   if (loading) return null;

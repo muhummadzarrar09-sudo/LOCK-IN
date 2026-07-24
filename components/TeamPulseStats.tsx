@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { Flame, Target, MessageSquare, Trophy } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
+import { useRealtimeEvent } from './CohortRealtime';
 
 type Props = {
   teamId: string;
@@ -75,26 +76,11 @@ export function TeamPulseStats({ teamId, memberUserIds }: Props) {
 
   useEffect(() => { load(); }, [load]);
 
-  // Real-time: refresh when any team member checks in or posts.
-  useEffect(() => {
-    if (memberUserIds.length === 0) return;
-    const checkInsCh = supabase
-      .channel(`team-pulse:check_ins:${teamId}`)
-      .on('postgres_changes' as any, { event: '*', schema: 'public', table: 'check_ins' }, () => {
-        load();
-      })
-      .subscribe();
-    const postsCh = supabase
-      .channel(`team-pulse:posts:${teamId}`)
-      .on('postgres_changes' as any, { event: 'INSERT', schema: 'public', table: 'team_startup_log', filter: `team_id=eq.${teamId}` }, () => {
-        load();
-      })
-      .subscribe();
-    return () => {
-      supabase.removeChannel(checkInsCh);
-      supabase.removeChannel(postsCh);
-    };
-  }, [teamId, memberUserIds.length, load]);
+  // Real-time: refresh when any team member posts (single shared channel
+  // via CohortRealtimeProvider). We no longer subscribe to all check_ins
+  // events (which previously meant N concurrent subscriptions per N
+  // teams — a real perf issue on the free tier).
+  useRealtimeEvent('team', () => load(), memberUserIds.length > 0);
 
   if (loading || !stats) return null;
 

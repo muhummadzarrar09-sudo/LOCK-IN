@@ -6,7 +6,7 @@ import Navbar from '@/components/Navbar';
 import PageHeader from '@/components/PageHeader';
 import EmptyState from '@/components/EmptyState';
 import { SkeletonList } from '@/components/Skeleton';
-import { useRealtimeTableIn } from '@/lib/realtime';
+import { useRealtimeEvent } from '@/components/CohortRealtime';
 import { TeamPulseStats } from '@/components/TeamPulseStats';
 import { FreshnessDot } from '@/components/FreshnessDot';
 
@@ -153,7 +153,10 @@ export default function TeamPage() {
     }
   }, [myTeams]);
 
-  useRealtimeTableIn('team_startup_log', 'INSERT', 'team_id', myTeams, refreshLogs, [refreshLogs, myTeams]);
+  // Real-time: refresh team feed when teammates post. Subscribes via the
+  // single shared channel (CohortRealtimeProvider) — no local channel
+  // setup here.
+  useRealtimeEvent('team', () => refreshLogs(), myTeams.length > 0);
 
   return (
     <>

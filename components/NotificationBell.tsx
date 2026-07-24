@@ -5,6 +5,7 @@ import { Bell, FileText, MessageCircle, MessageSquare, Check } from 'lucide-reac
 import { supabase } from '@/lib/supabase';
 import { useToast } from './Toast';
 import { relativeTime } from '@/lib/ui';
+import { useRealtimeEvent, useRealtimeContext } from './CohortRealtime';
 
 const SEEN_KEY = 'discipline.lastSeenNotifications.v1';
 
@@ -57,7 +58,6 @@ export function NotificationBell({ userId }: { userId: string | null }) {
           .order('created_at', { ascending: false })
           .limit(5);
         teamRows = (data || []);
-        // Hydrate usernames
         if (teamRows.length > 0) {
           const userIds = [...new Set(teamRows.map((t) => t.user_id))];
           const { data: profiles } = await supabase.from('profiles').select('id, username').in('id', userIds);
@@ -107,38 +107,11 @@ export function NotificationBell({ userId }: { userId: string | null }) {
     recompute();
   }, [recompute]);
 
-  // Real-time: when a new report / community post / team log appears, refresh
-  useEffect(() => {
-    if (!userId) return;
-
-    const reportsChannel = supabase
-      .channel(`bell:reports`)
-      .on('postgres_changes' as any, { event: 'INSERT', schema: 'public', table: 'reports' }, () => recompute())
-      .subscribe();
-
-    const communityChannel = supabase
-      .channel(`bell:community`)
-      .on('postgres_changes' as any, { event: 'INSERT', schema: 'public', table: 'community_posts' }, () => recompute())
-      .subscribe();
-
-    let teamChannel: any = null;
-    const setupTeamChannel = async () => {
-      const { data: memberships } = await supabase.from('team_members').select('team_id').eq('user_id', userId);
-      const teamIds = (memberships || []).map((m: any) => m.team_id);
-      if (teamIds.length === 0) return;
-      teamChannel = supabase
-        .channel(`bell:team_log`)
-        .on('postgres_changes' as any, { event: 'INSERT', schema: 'public', table: 'team_startup_log', filter: `team_id=in.(${teamIds.join(',')})` }, () => recompute())
-        .subscribe();
-    };
-    setupTeamChannel();
-
-    return () => {
-      supabase.removeChannel(reportsChannel);
-      supabase.removeChannel(communityChannel);
-      if (teamChannel) supabase.removeChannel(teamChannel);
-    };
-  }, [userId, recompute]);
+  // Subscribe to the SINGLE shared realtime channels via the provider.
+  // No more local channel setup here.
+  useRealtimeEvent('report', () => recompute());
+  useRealtimeEvent('community', () => recompute());
+  useRealtimeEvent('team', () => recompute());
 
   const total = items.length;
 

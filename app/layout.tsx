@@ -7,6 +7,7 @@ import { CookieConsent } from '@/components/CookieConsent';
 import { CommandPalette } from '@/components/CommandPalette';
 import { AdminViewBanner } from '@/components/AdminViewBanner';
 import { GlobalRealtimeToaster } from '@/components/GlobalRealtimeToaster';
+import { CohortRealtimeProvider } from '@/components/CohortRealtime';
 
 const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL || 'https://lockin.app';
 const OG_IMAGE = `${BASE_URL}/icon-512.png`;
@@ -90,7 +91,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@300;400;600;800;900&display=swap" rel="stylesheet" />
 
         {/* Speculation Rules API — pre-render next navigation on hover (Chrome 109+).
-            Makes dashboard→leaderboard→team→reports feel instant. */}
+            Prefetch only by default (cheap, doesn't re-execute data fetchers);
+            prerender on aggressive click. Excludes auth + admin + settings
+            to avoid duplicating RLS-protected queries on hover. */}
         <script
           type="speculationrules"
           dangerouslySetInnerHTML={{
@@ -106,7 +109,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                 {
                   source: 'document',
                   where: { and: [{ href_matches: '/*' }, { not: { href_matches: ['/api/*', '/auth/*', '/admin/*', '/settings/*', '/welcome', '/_next/*'] } }] },
-                  eagerness: 'moderate',
+                  eagerness: 'conservative',
                 },
               ],
             }),
@@ -118,14 +121,16 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           Skip to main content
         </a>
         <ToastProvider>
-          <div className="min-h-screen flex flex-col">
-            <AdminViewBanner />
-            {children}
-            <InstallPrompt />
-            <CookieConsent />
-            <CommandPalette />
-            <GlobalRealtimeToaster />
-          </div>
+          <CohortRealtimeProvider>
+            <div className="min-h-screen flex flex-col">
+              <AdminViewBanner />
+              {children}
+              <InstallPrompt />
+              <CookieConsent />
+              <CommandPalette />
+              <GlobalRealtimeToaster />
+            </div>
+          </CohortRealtimeProvider>
         </ToastProvider>
         <ServiceWorkerRegistrar />
       </body>

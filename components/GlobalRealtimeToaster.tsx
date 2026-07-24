@@ -3,94 +3,83 @@
 import { useEffect, useRef, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useToast } from './Toast';
+import { useRealtimeContext } from './CohortRealtime';
 
 /**
- * Global real-time toaster. Subscribes to three event sources:
- * - reports (new admin-publish)
- * - community_posts (new admin announcement)
- * - team_startup_log (filtered to teams the user is in)
- *
- * On each event, shows a short info toast. Skips the initial
- * pre-existing rows so the user isn't bombarded on first load.
+ * App-wide toast fan-out. Subscribes to the shared realtime channels
+ * (opened by CohortRealtimeProvider) and shows a short info toast
+ * for every cohort event. No more local Supabase channels here.
  */
 export function GlobalRealtimeToaster() {
   const toast = useToast();
   const seenRef = useRef<Set<string>>(new Set());
-  const [userId, setUserId] = useState<string | null>(null);
+  const { userId } = useRealtimeContext();
+  const seenSelfRef = useRef<Set<string>>(new Set());
 
-  // Resolve userId from session
+  // Hydrate "seen self" set so we don't toast about our own posts
+  // even on the first session after mount
   useEffect(() => {
-    let mounted = true;
-    (async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (mounted) setUserId(session?.user?.id || null);
-    })();
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_evt, session) => {
-      if (mounted) setUserId(session?.user?.id || null);
-    });
-    return () => {
-      mounted = false;
-      subscription.unsubscribe();
-    };
+    if (typeof window === 'undefined') return;
+    try {
+      const raw = sessionStorage.getItem('discipline.seenSelfPosts.v1');
+      if (raw) seenSelfRef.current = new Set(JSON.parse(raw));
+    } catch { /* ignore */ }
   }, []);
+
+  const markSelf = (id: string) => {
+    seenSelfRef.current.add(id);
+    if (typeof window !== 'undefined') {
+      try { sessionStorage.setItem('discipline.seenSelfPosts.v1', JSON.stringify([...seenSelfRef.current])); } catch { /* ignore */ }
+    }
+  };
 
   useEffect(() => {
     if (!userId) return;
-    let mounted = true;
-    let teamChannel: ReturnType<typeof supabase.channel> | null = null;
-
-    const skip = (id: string) => {
-      if (seenRef.current.has(id)) return true;
-      seenRef.current.add(id);
-      return false;
-    };
-
-    const reportsCh = supabase
-      .channel('global:reports')
-      .on('postgres_changes' as any, { event: 'INSERT', schema: 'public', table: 'reports' }, (payload: any) => {
-        if (!mounted) return;
-        const row = payload.new;
-        if (!row || skip(`report-${row.id}`)) return;
-        toast.info(`New report: ${row.title}`);
-      })
-      .subscribe();
-
-    const communityCh = supabase
-      .channel('global:community')
-      .on('postgres_changes' as any, { event: 'INSERT', schema: 'public', table: 'community_posts' }, (payload: any) => {
-        if (!mounted) return;
-        const row = payload.new;
-        if (!row || skip(`community-${row.id}`)) return;
-        toast.info(`New announcement: ${row.title}`);
-      })
-      .subscribe();
-
-    // Team log: subscribe once we know the user's team IDs
     (async () => {
-      const { data: memberships } = await supabase.from('team_members').select('team_id').eq('user_id', userId);
-      const teamIds = (memberships || []).map((m: any) => m.team_id);
-      if (teamIds.length === 0) return;
-      teamChannel = supabase
-        .channel('global:team_log')
-        .on('postgres_changes' as any, { event: 'INSERT', schema: 'public', table: 'team_startup_log', filter: `team_id=in.(${teamIds.join(',')})` }, async (payload: any) => {
-          if (!mounted) return;
-          const row = payload.new;
-          if (!row || skip(`team-${row.id}`)) return;
-          if (row.user_id === userId) return; // skip self
-          const { data: prof } = await supabase.from('profiles').select('username').eq('id', row.user_id).maybeSingle();
-          const who = (prof as any)?.username || 'A teammate';
-          toast.info(`${who} just shipped an update`);
-        })
-        .subscribe();
+      const { data: myRecent } = await supabase
+        .from('team_startup_log')
+        .select('id')
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false })
+        .limit(50);
+      (myRecent || []).forEach((r: any) => seenSelfRef.current.add(r.id));
     })();
+  }, [userId]);
 
-    return () => {
-      mounted = false;
-      supabase.removeChannel(reportsCh);
-      supabase.removeChannel(communityCh);
-      if (teamChannel) supabase.removeChannel(teamChannel);
-    };
-  }, [userId, toast]);
+  // On every shared event, fire a toast
+  useRealtimeContext_userId_safe_event('report', (payload: any) => {
+    const row = payload?.new;
+    if (!row) return;
+    if (seenRef.current.has(`report-${row.id}`)) return;
+    seenRef.current.add(`report-${row.id}`);
+    toast.info(`New report: ${row.title}`);
+  });
+  useRealtimeContext_userId_safe_event('community', (payload: any) => {
+    const row = payload?.new;
+    if (!row) return;
+    if (seenRef.current.has(`community-${row.id}`)) return;
+    seenRef.current.add(`community-${row.id}`);
+    toast.info(`New announcement: ${row.title}`);
+  });
+  useRealtimeContext_userId_safe_event('team', async (payload: any) => {
+    const row = payload?.new;
+    if (!row) return;
+    if (seenRef.current.has(`team-${row.id}`)) return;
+    seenRef.current.add(`team-${row.id}`);
+    if (row.user_id === userId || seenSelfRef.current.has(row.id)) {
+      markSelf(row.id);
+      return;
+    }
+    const { data: prof } = await supabase.from('profiles').select('username').eq('id', row.user_id).maybeSingle();
+    const who = (prof as any)?.username || 'A teammate';
+    toast.info(`${who} just shipped an update`);
+  });
 
   return null;
+}
+
+// Wrapper hook to avoid TS issues with the conditional enabled param
+import { useRealtimeEvent } from './CohortRealtime';
+function useRealtimeContext_userId_safe_event(type: 'report' | 'community' | 'team', cb: (payload: any) => void) {
+  useRealtimeEvent(type, cb);
 }
