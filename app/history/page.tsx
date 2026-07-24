@@ -44,24 +44,19 @@ export default function HistoryPage() {
       }
       const uid = session.user.id;
 
-      // Streak
-      const { data: streakData } = await supabase
-        .from('streaks')
-        .select('current_streak, best_streak')
-        .eq('user_id', uid)
-        .maybeSingle();
+      // Fetch streak + cohort + blocks in parallel
+      const [streakRes, cohortRes, blocksRes] = await Promise.all([
+        supabase.from('streaks').select('current_streak, best_streak').eq('user_id', uid).maybeSingle(),
+        supabase.from('cohorts').select('start_date, end_date').order('start_date', { ascending: false }).limit(1).maybeSingle(),
+        supabase.from('time_blocks').select('id').eq('user_id', uid),
+      ]);
+
+      const streakData = streakRes.data;
       if (streakData) {
         setStreak((streakData as any).current_streak || 0);
         setBest((streakData as any).best_streak || 0);
       }
-
-      // Active cohort
-      const { data: cohort } = await supabase
-        .from('cohorts')
-        .select('start_date, end_date')
-        .order('start_date', { ascending: false })
-        .limit(1)
-        .maybeSingle();
+      const cohort = cohortRes.data;
       const start = (cohort as any)?.start_date as string | undefined;
       const end = (cohort as any)?.end_date as string | undefined;
       setCohortStart(start || null);
@@ -90,12 +85,7 @@ export default function HistoryPage() {
         });
       }
 
-      // Fetch user's time_blocks count (use any day — the user has the same blocks per day in v1)
-      const { data: blocks } = await supabase
-        .from('time_blocks')
-        .select('id')
-        .eq('user_id', uid);
-      const totalBlocks = (blocks || []).length;
+      const totalBlocks = (blocksRes.data || []).length;
       cells.forEach((c) => { c.blocksTotal = totalBlocks; });
 
       // Fetch check_ins grouped by day

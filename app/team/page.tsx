@@ -75,33 +75,45 @@ export default function TeamPage() {
         if (!session) return;
         setUserId(session.user.id);
 
-        const { data: myMemberships } = await supabase.from('team_members').select('team_id').eq('user_id', session.user.id);
-        const myTeamIds = (myMemberships || []).map((m: any) => m.team_id);
+        // Parallel: my memberships + all teams (they don't depend on each other)
+        const [myMembershipsRes, teamsRes] = await Promise.all([
+          supabase.from('team_members').select('team_id').eq('user_id', session.user.id),
+          supabase.from('teams').select('*').order('created_at', { ascending: false }),
+        ]);
+        const myTeamIds = (myMembershipsRes.data || []).map((m: any) => m.team_id);
         setMyTeams(myTeamIds);
-
-        const { data: teamsData } = await supabase.from('teams').select('*').order('created_at', { ascending: false });
-        setTeams((teamsData as any) || []);
+        setTeams((teamsRes.data as any) || []);
 
         if (myTeamIds.length > 0) {
-          const { data: membersData } = await supabase.from('team_members').select('team_id,user_id').in('team_id', myTeamIds);
-          const userIds = [...new Set((membersData || []).map((m: any) => m.user_id))];
-          const { data: profiles } = await supabase.from('profiles').select('id,username,email').in('id', userIds);
-          const profileMap = new Map((profiles || []).map((p: any) => [p.id, p]));
-          const enriched = (membersData || []).map((m: any) => ({ ...m, profiles: profileMap.get(m.user_id) }));
-          setMembers(enriched);
+          // Parallel: members of my teams + the team feed logs
+          const [membersRes, logsRes] = await Promise.all([
+            supabase.from('team_members').select('team_id,user_id').in('team_id', myTeamIds),
+            supabase
+              .from('team_startup_log')
+              .select('id,team_id,user_id,note,created_at')
+              .in('team_id', myTeamIds)
+              .order('created_at', { ascending: false })
+              .limit(30),
+          ]);
+          const membersData = membersRes.data;
+          const logsData = logsRes.data;
 
-          // Team feed (startup log)
-          const { data: logsData } = await supabase
-            .from('team_startup_log')
-            .select('id,team_id,user_id,note,created_at')
-            .in('team_id', myTeamIds)
-            .order('created_at', { ascending: false })
-            .limit(30);
-          if (logsData) {
-            const logUserIds = [...new Set((logsData as any[]).map((l) => l.user_id))];
-            const { data: logProfiles } = await supabase.from('profiles').select('id,username').in('id', logUserIds);
-            const logProfileMap = new Map((logProfiles || []).map((p: any) => [p.id, p]));
-            setLogs((logsData as any[]).map((l) => ({ ...l, profiles: logProfileMap.get(l.user_id) })));
+          const userIds = [...new Set((membersData || []).map((m: any) => m.user_id))];
+          const logUserIds = [...new Set((logsData || []).map((l: any) => l.user_id))];
+          // Combined: dedupe + fetch all profiles in one round-trip
+          const allUserIds = [...new Set([...userIds, ...logUserIds])];
+          if (allUserIds.length > 0) {
+            const { data: profiles } = await supabase
+              .from('profiles')
+              .select('id,username,email')
+              .in('id', allUserIds);
+            const profileMap = new Map((profiles || []).map((p: any) => [p.id, p]));
+            const enriched = (membersData || []).map((m: any) => ({ ...m, profiles: profileMap.get(m.user_id) }));
+            setMembers(enriched);
+            setLogs((logsData || []).map((l: any) => ({ ...l, profiles: profileMap.get(l.user_id) })));
+          } else {
+            setMembers([]);
+            setLogs([]);
           }
         }
       } catch (e) {
