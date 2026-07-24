@@ -6,6 +6,7 @@ import { ServiceWorkerRegistrar } from '@/components/ServiceWorkerRegistrar';
 import { CookieConsent } from '@/components/CookieConsent';
 import { CommandPalette } from '@/components/CommandPalette';
 import { AdminViewBanner } from '@/components/AdminViewBanner';
+import { GlobalRealtimeToaster } from '@/components/GlobalRealtimeToaster';
 
 const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL || 'https://lockin.app';
 const OG_IMAGE = `${BASE_URL}/icon-512.png`;
@@ -123,6 +124,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             <InstallPrompt />
             <CookieConsent />
             <CommandPalette />
+            <GlobalRealtimeToaster />
           </div>
         </ToastProvider>
         <ServiceWorkerRegistrar />
