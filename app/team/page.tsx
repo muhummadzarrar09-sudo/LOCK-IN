@@ -7,6 +7,7 @@ import PageHeader from '@/components/PageHeader';
 import EmptyState from '@/components/EmptyState';
 import { SkeletonList } from '@/components/Skeleton';
 import { useRealtimeTableIn } from '@/lib/realtime';
+import { TeamPulseStats } from '@/components/TeamPulseStats';
 
 type Team = {
   id: string;
@@ -232,6 +233,12 @@ export default function TeamPage() {
                         )}
                       </div>
                     </div>
+
+                    {/* Team pulse: collective stats */}
+                    <TeamPulseStats
+                      teamId={team.id}
+                      memberUserIds={teamMembers.map((m) => m.user_id)}
+                    />
 
                     {/* Team feed */}
                     <div className="mb-6">
