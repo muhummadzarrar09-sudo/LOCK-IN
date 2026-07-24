@@ -1,16 +1,17 @@
 "use client";
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Settings, Save, LogOut, Users, FileText, MessageCircle, Plus, Shield, TrendingUp, Activity, BookOpen, Eye, EyeOff, Bug, Clock } from 'lucide-react';
+import { Settings, Save, LogOut, Users, FileText, MessageCircle, Plus, Shield, TrendingUp, Activity, BookOpen, Eye, EyeOff, Bug, Clock, BarChart3 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import Navbar from '@/components/Navbar';
 import PageHeader from '@/components/PageHeader';
 import { useToast } from '@/components/Toast';
 import ConfirmDialog from '@/components/ConfirmDialog';
+import { AnalyticsTab } from '@/components/admin/AnalyticsTab';
 
 type Profile = { id: string; username: string; email: string; role: string; created_at?: string };
 
-type Tab = 'daily' | 'weekly' | 'setup' | 'support';
+type Tab = 'daily' | 'weekly' | 'setup' | 'support' | 'analytics';
 
 export default function AdminPage() {
   const router = useRouter();
@@ -308,16 +309,22 @@ export default function AdminPage() {
               </div>
 
               {/* Tabs */}
-              <div className="flex items-center gap-1 mb-5 border-b border-neutral-900">
-                {(['daily', 'weekly', 'setup', 'support'] as Tab[]).map((t) => (
+              <div className="flex items-center gap-1 mb-5 border-b border-neutral-900 overflow-x-auto">
+                {([
+                  { id: 'daily', label: 'Daily' },
+                  { id: 'weekly', label: 'Weekly' },
+                  { id: 'setup', label: 'Setup' },
+                  { id: 'analytics', label: 'Analytics' },
+                  { id: 'support', label: 'Support' },
+                ] as { id: Tab; label: string }[]).map(({ id: t, label }) => (
                   <button
                     key={t}
                     onClick={() => setTab(t)}
-                    className={`px-4 py-2.5 text-xs font-bold uppercase tracking-wider transition-colors relative ${
+                    className={`shrink-0 px-4 py-2.5 text-xs font-bold uppercase tracking-wider transition-colors relative ${
                       tab === t ? 'text-amber-300' : 'text-neutral-500 hover:text-neutral-300'
                     }`}
                   >
-                    {t}
+                    {label}
                     {tab === t && <span className="absolute left-2 right-2 -bottom-px h-0.5 bg-amber-400" />}
                   </button>
                 ))}
@@ -440,6 +447,12 @@ export default function AdminPage() {
                       After creating a team, you can add members from the Members tab. Teams are auto-assigned to the current cohort.
                     </p>
                   </SectionCard>
+                </div>
+              )}
+
+              {tab === 'analytics' && (
+                <div className="space-y-6">
+                  <AnalyticsTab />
                 </div>
               )}
 

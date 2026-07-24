@@ -1,11 +1,12 @@
 "use client";
-import { useEffect, useState, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { FileText, WifiOff, Clock, X, Search } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import Navbar from '@/components/Navbar';
 import PageHeader from '@/components/PageHeader';
 import EmptyState from '@/components/EmptyState';
 import { SkeletonList } from '@/components/Skeleton';
+import { usePagination, LoadMoreSentinel } from '@/lib/pagination';
 
 type Report = {
   id: string;
@@ -13,6 +14,8 @@ type Report = {
   body: string;
   created_at: string;
 };
+
+const PAGE_SIZE = 20;
 
 function reportType(title: string): string {
   const t = title.toLowerCase();
@@ -29,27 +32,29 @@ function readingTime(body: string): string {
 }
 
 export default function ReportsPage() {
-  const [reports, setReports] = useState<Report[]>([]);
-  const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<Report | null>(null);
   const [query, setQuery] = useState('');
 
-  useEffect(() => {
-    const load = async () => {
-      const { data, error } = await supabase.from('reports').select('*').order('created_at', { ascending: false }).limit(50);
-      if (!error && data) setReports(data as any);
-      setLoading(false);
-    };
-    load();
+  const fetcher = useCallback(async (page: number, pageSize: number) => {
+    const from = page * pageSize;
+    const to = from + pageSize - 1;
+    const { data, error } = await supabase
+      .from('reports')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .range(from, to);
+    if (error) throw error;
+    return { rows: (data || []) as Report[], hasMore: (data || []).length === pageSize };
   }, []);
 
+  const { rows, loading, loadingMore, hasMore, loadMore, error } = usePagination<Report>({ fetcher, pageSize: PAGE_SIZE });
+
+  // Client-side filter
   const filtered = useMemo(() => {
-    if (!query.trim()) return reports;
+    if (!query.trim()) return rows;
     const q = query.toLowerCase();
-    return reports.filter(r =>
-      r.title.toLowerCase().includes(q) || r.body.toLowerCase().includes(q)
-    );
-  }, [reports, query]);
+    return rows.filter((r) => r.title.toLowerCase().includes(q) || r.body.toLowerCase().includes(q));
+  }, [rows, query]);
 
   return (
     <>
@@ -62,22 +67,26 @@ export default function ReportsPage() {
             subtitle="Curated by your cohort lead · Available offline"
           />
 
-          {reports.length > 0 && (
-            <div className="mb-5 relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-500 pointer-events-none" />
-              <input
-                type="search"
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder="Search reports…"
-                className="w-full h-10 pl-10 pr-4 rounded-lg bg-neutral-900/60 border border-neutral-800 text-sm text-white placeholder-neutral-500 focus:outline-none focus:border-amber-500/60 focus:ring-1 focus:ring-amber-500/20 transition-all"
-              />
+          <div className="mb-5 relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-500 pointer-events-none" />
+            <input
+              type="search"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search reports…"
+              className="w-full h-10 pl-10 pr-4 rounded-lg bg-neutral-900/60 border border-neutral-800 text-sm text-white placeholder-neutral-500 focus:outline-none focus:border-amber-500/60 focus:ring-1 focus:ring-amber-500/20 transition-all"
+            />
+          </div>
+
+          {error && (
+            <div className="rounded-lg bg-amber-900/15 border border-amber-900/40 px-4 py-3 text-sm text-amber-200 mb-4">
+              {error}
             </div>
           )}
 
           {loading ? (
-            <SkeletonList rows={3} />
-          ) : reports.length === 0 ? (
+            <SkeletonList rows={5} />
+          ) : rows.length === 0 ? (
             <EmptyState
               icon={FileText}
               title="No reports published yet"
@@ -121,6 +130,7 @@ export default function ReportsPage() {
                   </button>
                 );
               })}
+              <LoadMoreSentinel onLoadMore={loadMore} hasMore={hasMore} loadingMore={loadingMore} />
             </div>
           )}
         </div>

@@ -1,11 +1,13 @@
 "use client";
-import { useEffect, useState } from 'react';
+import { useState, useCallback } from 'react';
 import { MessageCircle } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import Navbar from '@/components/Navbar';
 import PageHeader from '@/components/PageHeader';
 import EmptyState from '@/components/EmptyState';
 import { SkeletonList } from '@/components/Skeleton';
+import { usePagination, LoadMoreSentinel } from '@/lib/pagination';
+import { relativeTime } from '@/lib/ui';
 
 type Post = {
   id: string;
@@ -14,29 +16,22 @@ type Post = {
   created_at: string;
 };
 
-function timeAgo(iso: string): string {
-  const ms = Date.now() - new Date(iso).getTime();
-  const min = Math.floor(ms / 60000);
-  if (min < 60) return `${min}m ago`;
-  const hr = Math.floor(min / 60);
-  if (hr < 24) return `${hr}h ago`;
-  const d = Math.floor(hr / 24);
-  if (d < 7) return `${d}d ago`;
-  return new Date(iso).toLocaleDateString();
-}
+const PAGE_SIZE = 20;
 
 export default function CommunityPage() {
-  const [posts, setPosts] = useState<Post[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    const load = async () => {
-      const { data, error } = await supabase.from('community_posts').select('*').order('created_at', { ascending: false }).limit(20);
-      if (!error && data) setPosts(data as any);
-      setLoading(false);
-    };
-    load();
+  const fetcher = useCallback(async (page: number, pageSize: number) => {
+    const from = page * pageSize;
+    const to = from + pageSize - 1;
+    const { data, error } = await supabase
+      .from('community_posts')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .range(from, to);
+    if (error) throw error;
+    return { rows: (data || []) as Post[], hasMore: (data || []).length === pageSize };
   }, []);
+
+  const { rows, loading, loadingMore, hasMore, loadMore, error } = usePagination<Post>({ fetcher, pageSize: PAGE_SIZE });
 
   return (
     <>
@@ -49,9 +44,15 @@ export default function CommunityPage() {
             subtitle="Updates from your cohort lead"
           />
 
+          {error && (
+            <div className="rounded-lg bg-amber-900/15 border border-amber-900/40 px-4 py-3 text-sm text-amber-200 mb-4">
+              {error}
+            </div>
+          )}
+
           {loading ? (
             <SkeletonList rows={3} />
-          ) : posts.length === 0 ? (
+          ) : rows.length === 0 ? (
             <EmptyState
               icon={MessageCircle}
               title="No announcements yet"
@@ -59,15 +60,16 @@ export default function CommunityPage() {
             />
           ) : (
             <div className="space-y-3">
-              {posts.map((post) => (
+              {rows.map((post) => (
                 <article key={post.id} className="rounded-2xl border border-neutral-800 bg-[#121212]/60 p-5 hover:border-neutral-700 transition-colors">
                   <div className="flex items-start justify-between gap-3 mb-2">
                     <h3 className="text-sm font-extrabold text-amber-100 leading-tight">{post.title}</h3>
-                    <span className="shrink-0 text-[10px] text-neutral-500 font-mono">{timeAgo(post.created_at)}</span>
+                    <span className="shrink-0 text-[10px] text-neutral-500 font-mono">{relativeTime(post.created_at)}</span>
                   </div>
                   <p className="text-xs text-neutral-300 leading-relaxed">{post.body}</p>
                 </article>
               ))}
+              <LoadMoreSentinel onLoadMore={loadMore} hasMore={hasMore} loadingMore={loadingMore} />
             </div>
           )}
         </div>

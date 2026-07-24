@@ -60,6 +60,7 @@ export default function Navbar() {
     { label: 'Team', href: '/team', icon: Users },
     { label: 'Reports', href: '/reports', icon: FileText },
     { label: 'Community', href: '/community', icon: MessageCircle },
+    { label: 'Members', href: '/people', icon: Users },
     { label: 'Help', href: '/help', icon: LifeBuoy },
     { label: 'Settings', href: '/settings', icon: Sliders },
     ...(role === 'admin' ? [{ label: 'Admin', href: '/admin', icon: Settings }] : []),
