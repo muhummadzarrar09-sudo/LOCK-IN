@@ -7,6 +7,7 @@ import PageHeader from '@/components/PageHeader';
 import EmptyState from '@/components/EmptyState';
 import { SkeletonList } from '@/components/Skeleton';
 import { usePagination, LoadMoreSentinel } from '@/lib/pagination';
+import { FreshnessDot } from '@/components/FreshnessDot';
 
 type Report = {
   id: string;
@@ -120,7 +121,8 @@ export default function ReportsPage() {
                       {r.body.slice(0, 160)}…
                     </p>
                     <div className="flex items-center justify-between">
-                      <span className="text-[10px] text-neutral-600 font-mono">
+                      <span className="text-[10px] text-neutral-600 font-mono inline-flex items-center gap-1.5">
+                        <FreshnessDot iso={r.created_at} />
                         {new Date(r.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                       </span>
                       <span className="inline-flex items-center gap-1.5 text-[10px] text-emerald-300/80 font-semibold">

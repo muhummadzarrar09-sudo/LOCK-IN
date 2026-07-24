@@ -8,6 +8,7 @@ import EmptyState from '@/components/EmptyState';
 import { SkeletonList } from '@/components/Skeleton';
 import { usePagination, LoadMoreSentinel } from '@/lib/pagination';
 import { relativeTime } from '@/lib/ui';
+import { FreshnessDot } from '@/components/FreshnessDot';
 
 type Post = {
   id: string;
@@ -64,7 +65,10 @@ export default function CommunityPage() {
                 <article key={post.id} className="rounded-2xl border border-neutral-800 bg-[#121212]/60 p-5 hover:border-neutral-700 transition-colors">
                   <div className="flex items-start justify-between gap-3 mb-2">
                     <h3 className="text-sm font-extrabold text-amber-100 leading-tight">{post.title}</h3>
-                    <span className="shrink-0 text-[10px] text-neutral-500 font-mono">{relativeTime(post.created_at)}</span>
+                    <span className="shrink-0 text-[10px] text-neutral-500 font-mono inline-flex items-center gap-1.5">
+                      <FreshnessDot iso={post.created_at} />
+                      {relativeTime(post.created_at)}
+                    </span>
                   </div>
                   <p className="text-xs text-neutral-300 leading-relaxed">{post.body}</p>
                 </article>

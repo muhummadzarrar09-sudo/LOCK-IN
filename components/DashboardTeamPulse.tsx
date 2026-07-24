@@ -7,6 +7,7 @@ import { supabase } from '@/lib/supabase';
 import { useRealtimeTableIn } from '@/lib/realtime';
 import { useToast } from './Toast';
 import { initials, relativeTime } from '@/lib/ui';
+import { FreshnessDot } from './FreshnessDot';
 
 type LogEntry = {
   id: string;
@@ -128,7 +129,8 @@ export function DashboardTeamPulse({ userId, teamIds, teamName }: Props) {
                   {' '}
                   <span className="text-neutral-400">{entry.note}</span>
                 </p>
-                <p className="text-[10px] text-neutral-600 inline-flex items-center gap-1 mt-0.5">
+                <p className="text-[10px] text-neutral-600 inline-flex items-center gap-1.5 mt-0.5">
+                  <FreshnessDot iso={entry.created_at} />
                   <Clock className="w-2.5 h-2.5" />
                   {relativeTime(entry.created_at)}
                 </p>

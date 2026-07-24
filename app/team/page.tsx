@@ -8,6 +8,7 @@ import EmptyState from '@/components/EmptyState';
 import { SkeletonList } from '@/components/Skeleton';
 import { useRealtimeTableIn } from '@/lib/realtime';
 import { TeamPulseStats } from '@/components/TeamPulseStats';
+import { FreshnessDot } from '@/components/FreshnessDot';
 
 type Team = {
   id: string;
@@ -286,7 +287,8 @@ export default function TeamPage() {
                                   </div>
                                   <span className="text-xs font-semibold text-neutral-200">{name}</span>
                                   {entry.user_id === userId && <span className="text-[9px] text-amber-300 font-bold">YOU</span>}
-                                  <span className="ml-auto text-[10px] text-neutral-500 inline-flex items-center gap-1">
+                                  <span className="ml-auto text-[10px] text-neutral-500 inline-flex items-center gap-1.5">
+                                    <FreshnessDot iso={entry.created_at} />
                                     <Clock className="w-2.5 h-2.5" /> {timeAgo(entry.created_at)}
                                   </span>
                                 </div>
