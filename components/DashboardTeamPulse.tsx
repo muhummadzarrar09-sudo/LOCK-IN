@@ -50,7 +50,7 @@ export function DashboardTeamPulse({ userId, teamIds, teamName }: Props) {
       const ids = [...new Set((data as any[]).map((l) => l.user_id))];
       if (ids.length > 0) {
         const { data: profiles } = await supabase
-          .from('profiles')
+          .from('public_profiles')
           .select('id, username')
           .in('id', ids);
         const pmap = new Map((profiles || []).map((p: any) => [p.id, p.username]));

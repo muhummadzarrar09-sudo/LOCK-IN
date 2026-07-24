@@ -34,38 +34,21 @@ export default function DeleteAccountPage() {
     setDialog(false);
     setDeleting(true);
     try {
-      // 1. Delete user-owned data. Order: children first (FKs may not cascade).
-      // We'll attempt the deletes and tolerate failures since some tables may not exist.
-      const tables = [
-        { name: 'check_ins', column: 'user_id' },
-        { name: 'time_blocks', column: 'user_id' },
-        { name: 'streaks', column: 'user_id' },
-        { name: 'team_members', column: 'user_id' },
-        { name: 'team_startup_log', column: 'user_id' },
-        { name: 'reminders', column: 'user_id' },
-        { name: 'device_sessions', column: 'user_id' },
-      ];
-      for (const t of tables) {
-        try {
-          await (supabase.from(t.name) as any).delete().eq(t.column, userId);
-        } catch (e) {
-          // ignore — table may not exist or already empty
-        }
+      const res = await fetch('/api/account/delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: userEmail }),
+      });
+      if (!res.ok) {
+        const payload = await res.json().catch(() => ({}));
+        throw new Error(payload.error || 'Deletion failed');
       }
-      // 2. Delete profile row
-      try {
-        await supabase.from('profiles').delete().eq('id', userId);
-      } catch {}
 
-      // 3. Sign out (this also clears the local session; the auth user row
-      //    will need to be deleted from Supabase Auth — typically via service role.
-      //    We sign out so the user can no longer use the account from the client.)
       await supabase.auth.signOut();
-
       setStep(3);
       toast.success('Your account has been deleted.');
     } catch (err: any) {
-      toast.error('Something went wrong. Please email support@accountability.com.');
+      toast.error(err?.message || 'Something went wrong. Please email support@lockin.app.');
     } finally {
       setDeleting(false);
     }

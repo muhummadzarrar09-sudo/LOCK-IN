@@ -5,7 +5,7 @@
  *   - HTML navigations:  network-first, fall back to cached shell.
  *   - Static assets:     cache-first (immutable hashed bundles).
  *   - API / Supabase:    network-only. Never cache.
- *   - Reports:           stale-while-revalidate so they read offline too.
+ *   - Member pages:      network-only to avoid offline disclosure after logout.
  *
  * Versioned cache name. Bump on deploys to invalidate stale shells.
  */
@@ -61,12 +61,21 @@ self.addEventListener('fetch', (event) => {
   // Never intercept Supabase API calls — they need to be live.
   if (url.hostname.includes('supabase')) return;
 
-  // HTML navigations: network-first, fall back to cached shell.
+  const publicNavigationPaths = ['/', '/auth/login', '/auth/signup', '/auth/forgot', '/privacy', '/terms', '/help', '/whats-new'];
+  const isPublicNavigation = publicNavigationPaths.includes(url.pathname);
+
+  // HTML navigations: cache public pages only. Authenticated pages may contain
+  // account-specific UI state and must not be available from an offline cache
+  // after logout or on a shared device.
   if (req.mode === 'navigate') {
+    if (!isPublicNavigation) {
+      event.respondWith(fetch(req));
+      return;
+    }
+
     event.respondWith(
       fetch(req)
         .then((res) => {
-          // Cache the latest shell for this route
           const copy = res.clone();
           caches.open(SHELL_CACHE).then((c) => c.put(req, copy)).catch(() => {});
           return res;
@@ -98,18 +107,10 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Default: network with cache fallback.
-  event.respondWith(
-    fetch(req)
-      .then((res) => {
-        if (res.ok && url.pathname.startsWith('/reports')) {
-          const copy = res.clone();
-          caches.open(REPORTS_CACHE).then((c) => c.put(req, copy)).catch(() => {});
-        }
-        return res;
-      })
-      .catch(() => caches.match(req))
-  );
+  // Default: network-only for dynamic/member pages. We intentionally avoid
+  // caching reports or other protected routes to prevent offline disclosure
+  // after logout or on shared devices.
+  event.respondWith(fetch(req));
 });
 
 self.addEventListener('message', (event) => {

@@ -65,7 +65,6 @@ export default function WelcomePage() {
           username: form.username,
           timezone: form.timezone,
           email: userEmail,
-          role: 'member',
         } as any, { onConflict: 'id' });
         if (error) {
           toast.error('Could not save profile. Please try again.');
@@ -156,7 +155,7 @@ export default function WelcomePage() {
               className="h-11 px-5 rounded-xl bg-amber-400 text-black font-extrabold text-sm hover:bg-amber-300 active:scale-[0.99] transition-all disabled:opacity-50 inline-flex items-center gap-2"
             >
               {saving && <Loader2 className="w-4 h-4 animate-spin" />}
-              {step === 3 ? 'Enter the cohort' : step === 0 ? "Let's go" : 'Continue'}
+              {step === 3 ? 'Enter Command Center' : step === 0 ? 'Accept the contract' : 'Continue'}
               {!saving && <ArrowRight className="w-4 h-4" />}
             </button>
           </div>
@@ -181,25 +180,25 @@ export default function WelcomePage() {
 function Step0({ email }: { email: string }) {
   return (
     <div className="fade-in-up">
-      <p className="text-[10px] uppercase tracking-[0.3em] text-amber-300/80 font-bold mb-3">Step 1 of 4</p>
+      <p className="text-[10px] uppercase tracking-[0.3em] text-amber-300/80 font-bold mb-3">Access Granted</p>
       <h1 className="font-serif text-3xl md:text-4xl tracking-tighter text-white mb-3">
-        Welcome{email ? `, ${email.split('@')[0]}` : ''}.
+        You&apos;re in{email ? `, ${email.split('@')[0]}` : ''}.
       </h1>
       <p className="text-sm text-neutral-400 leading-relaxed mb-4">
-        You&apos;re in the cohort. Here&apos;s how the next 30 days work:
+        This is the contract: 30 days, six daily locks, visible proof, and a squad that sees the work.
       </p>
       <ul className="space-y-3 text-sm text-neutral-300">
         <li className="flex items-start gap-3">
           <span className="w-6 h-6 rounded-md bg-amber-500/15 text-amber-300 text-[11px] font-extrabold flex items-center justify-center shrink-0 mt-0.5">1</span>
-          <span><span className="font-semibold text-white">Set your profile</span> — username, timezone.</span>
+          <span><span className="font-semibold text-white">Set your identity</span> — name, timezone, and the room you&apos;ll show up in.</span>
         </li>
         <li className="flex items-start gap-3">
           <span className="w-6 h-6 rounded-md bg-amber-500/15 text-amber-300 text-[11px] font-extrabold flex items-center justify-center shrink-0 mt-0.5">2</span>
-          <span><span className="font-semibold text-white">Day 1 starts</span> — your schedule appears, your first block unlocks at 06:00 local time.</span>
+          <span><span className="font-semibold text-white">Day 1 starts</span> — your Command Center opens and the first lock window begins at 06:00 local time.</span>
         </li>
         <li className="flex items-start gap-3">
           <span className="w-6 h-6 rounded-md bg-amber-500/15 text-amber-300 text-[11px] font-extrabold flex items-center justify-center shrink-0 mt-0.5">3</span>
-          <span><span className="font-semibold text-white">Check in, ship, repeat.</span> Your team sees everything. Your streak compounds.</span>
+          <span><span className="font-semibold text-white">Lock blocks, log proof, repeat.</span> Your squad sees everything. Your chain compounds.</span>
         </li>
       </ul>
     </div>
@@ -264,12 +263,12 @@ function Step3({ username }: { username: string }) {
         <div className="w-14 h-14 rounded-2xl bg-amber-500/15 border border-amber-500/30 mx-auto mb-4 flex items-center justify-center">
           <Check className="w-7 h-7 text-amber-300" strokeWidth={2.5} />
         </div>
-        <p className="text-[10px] uppercase tracking-[0.3em] text-amber-300/80 font-bold mb-2">Step 4 of 4</p>
+        <p className="text-[10px] uppercase tracking-[0.3em] text-amber-300/80 font-bold mb-2">Contract Accepted</p>
         <h1 className="font-serif text-3xl md:text-4xl tracking-tighter text-white mb-2">
-          You&apos;re ready, {username || 'friend'}.
+          Command Center ready, {username || 'friend'}.
         </h1>
         <p className="text-sm text-neutral-400 leading-relaxed max-w-sm mx-auto">
-          Your team will be assigned before Day 1. Here&apos;s what your first day looks like:
+          Your squad will be assigned before Day 1. Here&apos;s the execution timeline you&apos;ll lock:
         </p>
       </div>
 

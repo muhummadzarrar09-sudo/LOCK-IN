@@ -74,7 +74,7 @@ function LoginForm() {
           if (profileError.code === 'PGRST116') {
             const username = data.user.email?.split('@')[0] || 'member';
             await supabase.from('profiles').upsert(
-              { id: data.user.id, username, email: data.user.email || values.email, role: 'member' },
+              { id: data.user.id, username, email: data.user.email || values.email },
               { onConflict: 'id' }
             );
           }
@@ -86,7 +86,8 @@ function LoginForm() {
       }
 
       let finalTarget = redirectTo;
-      const isExplicitRedirect = searchParams.has('redirect');
+      const isSafeRedirect = finalTarget.startsWith('/') && !finalTarget.startsWith('//') && !finalTarget.startsWith('/auth');
+      const isExplicitRedirect = searchParams.has('redirect') && isSafeRedirect;
       if (!isExplicitRedirect) {
         finalTarget = role === 'admin' ? '/admin' : '/dashboard';
       }
@@ -191,7 +192,7 @@ function LoginForm() {
         </p>
         <p className="text-[11px] text-neutral-600">
           Trouble signing in?{' '}
-          <a href="mailto:support@accountability.com" className="text-neutral-500 hover:text-amber-300 underline underline-offset-4">
+          <a href="mailto:support@lockin.app" className="text-neutral-500 hover:text-amber-300 underline underline-offset-4">
             Contact support
           </a>
         </p>

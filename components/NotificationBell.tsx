@@ -60,7 +60,7 @@ export function NotificationBell({ userId }: { userId: string | null }) {
         teamRows = (data || []);
         if (teamRows.length > 0) {
           const userIds = [...new Set(teamRows.map((t) => t.user_id))];
-          const { data: profiles } = await supabase.from('profiles').select('id, username').in('id', userIds);
+          const { data: profiles } = await supabase.from('public_profiles').select('id, username').in('id', userIds);
           const pmap = new Map((profiles || []).map((p: any) => [p.id, p.username]));
           teamRows = teamRows.map((t) => ({ ...t, username: pmap.get(t.user_id) || 'Member' }));
         }

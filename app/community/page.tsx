@@ -41,8 +41,8 @@ export default function CommunityPage() {
         <div className="max-w-2xl mx-auto">
           <PageHeader
             icon={MessageCircle}
-            title="Community"
-            subtitle="Updates from your cohort lead"
+            title="Broadcasts"
+            subtitle="Operator updates from your cohort lead"
           />
 
           {error && (
@@ -56,13 +56,13 @@ export default function CommunityPage() {
           ) : rows.length === 0 ? (
             <EmptyState
               icon={MessageCircle}
-              title="No announcements yet"
-              description="Your cohort lead will post updates here as the cohort progresses. You'll get a notification when something new drops."
+              title="No broadcasts yet"
+              description="Your cohort lead will use this room for operator updates, deadlines, and field instructions."
             />
           ) : (
             <div className="space-y-3">
               {rows.map((post) => (
-                <article key={post.id} className="rounded-2xl border border-neutral-800 bg-[#121212]/60 p-5 hover:border-neutral-700 transition-colors">
+                <article key={post.id} className="rounded-2xl border border-amber-900/25 bg-[radial-gradient(circle_at_top_left,rgba(240,176,48,0.08),transparent_32%),linear-gradient(135deg,rgba(18,18,18,0.72),rgba(13,13,13,0.96))] p-5 hover:border-amber-700/35 transition-colors">
                   <div className="flex items-start justify-between gap-3 mb-2">
                     <h3 className="text-sm font-extrabold text-amber-100 leading-tight">{post.title}</h3>
                     <span className="shrink-0 text-[10px] text-neutral-500 font-mono inline-flex items-center gap-1.5">

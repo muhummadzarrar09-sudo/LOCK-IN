@@ -45,9 +45,9 @@ const SECTIONS: Section[] = [
     summary: 'The original launch. Time blocks, check-ins, streaks, teams, reports, community, leaderboard, profile, settings, admin. The full 30-day execution contract.',
     entries: [
       { icon: Sparkles, title: 'Welcome wizard', body: '4 steps: welcome, profile, timezone, Day 1 preview. Sets up the user’s defaults and shows what they signed up for.', tag: 'new' },
-      { icon: BarChart3, title: 'Real-time dashboards', body: 'Dashboard, leaderboard, team feed, reports, community, members, history, settings, admin. All Supabase real-time where it matters.', tag: 'new' },
+      { icon: BarChart3, title: 'Real-time dashboards', body: 'Dashboard, leaderboard, team feed, reports, community, members, history, settings, admin. Real-time where it matters.', tag: 'new' },
       { icon: Award, title: 'Streak freezes', body: 'Earned automatically at 7/14/21/30 day streaks. Auto-applied to your next missed day so a single miss doesn’t break the chain.', tag: 'new' },
-      { icon: Users, title: 'Teams + team feed', body: '3-4 members per squad. Shared startup log. Admin assigns teams. RLS protects team data.', tag: 'new' },
+      { icon: Users, title: 'Teams + team feed', body: '3-4 members per squad. Shared startup log. Admin assigns teams. Private squad access protects team data.', tag: 'new' },
       { icon: Bell, title: 'Browser push notifications', body: 'Notifications API for time-block reminders. Permission requested via the bell. No email, no separate app.', tag: 'new' },
     ],
   },

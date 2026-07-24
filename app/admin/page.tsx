@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Settings, Save, LogOut, Users, FileText, MessageCircle, Plus, Shield, TrendingUp, Activity, BookOpen, Eye, EyeOff, Bug, Clock, BarChart3 } from 'lucide-react';
+import { Settings, Save, LogOut, Users, FileText, MessageCircle, Plus, Shield, TrendingUp, Activity, BookOpen, Eye, Bug, Clock } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import Navbar from '@/components/Navbar';
 import PageHeader from '@/components/PageHeader';
@@ -113,103 +113,46 @@ export default function AdminPage() {
   };
 
   const loadMetrics = async () => {
-    // Streak average
-    const { data: streaks } = await supabase.from('streaks').select('current_streak');
-    if (streaks && streaks.length > 0) {
-      const sum = (streaks as any[]).reduce((s, x) => s + (x.current_streak || 0), 0);
-      setStreakAvg(Math.round((sum / streaks.length) * 10) / 10);
-    } else {
+    try {
+      const res = await fetch('/api/admin/analytics');
+      if (!res.ok) throw new Error('analytics failed');
+      const payload = await res.json();
+      const metrics = payload.metrics || {};
+      setStreakAvg(metrics.avg_streak ?? 0);
+      setReportCount(metrics.total_reports ?? 0);
+      setActiveToday(metrics.active_today ?? 0);
+      setCohortProgress((metrics.cohort_progress || null) as any);
+    } catch (error) {
+      console.warn('admin metrics failed', error);
       setStreakAvg(0);
-    }
-    // Reports count
-    const { count: rCount } = await supabase.from('reports').select('*', { count: 'exact', head: true });
-    setReportCount(rCount ?? 0);
-    // Active today = users with check_ins today
-    const today = new Date().toISOString().slice(0, 10);
-    const { data: todays } = await supabase.from('check_ins').select('user_id').gte('completed_at', `${today}T00:00:00Z`);
-    if (todays) {
-      setActiveToday(new Set((todays as any[]).map(c => c.user_id)).size);
-    } else {
+      setReportCount(0);
       setActiveToday(0);
-    }
-
-    // Cohort progress: day X of N + active rate today
-    const [{ data: cohortRow }, { count: totalMembers }] = await Promise.all([
-      supabase
-        .from('cohorts')
-        .select('start_date, end_date')
-        .order('start_date', { ascending: false })
-        .limit(1)
-        .maybeSingle(),
-      supabase
-        .from('profiles')
-        .select('*', { count: 'exact', head: true })
-        .eq('role', 'member'),
-    ]);
-    if (cohortRow && (cohortRow as any).start_date && (cohortRow as any).end_date) {
-      const start = new Date((cohortRow as any).start_date + 'T00:00:00Z');
-      const end = new Date((cohortRow as any).end_date + 'T23:59:59Z');
-      const total = Math.max(1, Math.round((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)));
-      const now = new Date();
-      const diffDays = Math.floor((now.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
-      const dayNumber = diffDays + 1;
-      const phase: 'pre' | 'running' | 'done' =
-        dayNumber < 1 ? 'pre' : dayNumber > total ? 'done' : 'running';
-      const pct = Math.max(0, Math.min(100, Math.round((dayNumber / total) * 100)));
-      const activeUsers = todays ? new Set((todays as any[]).map(c => c.user_id)).size : 0;
-      const activeRate = (totalMembers || 0) > 0
-        ? Math.round((activeUsers / (totalMembers || 1)) * 100)
-        : 0;
-      // Composite health score: 60% from today's activity, 40% from
-      // average streak. Streak capped at 30d for normalization.
-      const streakComponent = Math.min(100, ((streakAvg || 0) / 30) * 100);
-      const activityComponent = activeRate;
-      const healthScore = Math.round(activityComponent * 0.6 + streakComponent * 0.4);
-      const healthLabel: 'thriving' | 'steady' | 'at risk' =
-        healthScore >= 70 ? 'thriving' : healthScore >= 40 ? 'steady' : 'at risk';
-      setCohortProgress({
-        dayNumber: Math.max(1, Math.min(total, dayNumber)),
-        total,
-        pct,
-        phase,
-        activeRate,
-        healthScore,
-        healthLabel,
-      });
-    } else {
       setCohortProgress(null);
     }
   };
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!cohort) {
-      const { data, error } = await supabase.from('cohorts').insert({
+    const res = await fetch('/api/admin/cohorts', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        id: cohort?.id,
         name: form.name,
         start_date: form.start_date,
         end_date: form.end_date,
         enrollment_open: form.enrollment_open,
-      }).select().maybeSingle();
-      if (error) {
-        toast.error('Could not create cohort. Please try again.');
-        return;
-      }
-      setCohort(data);
-      toast.success('Cohort created');
-    } else {
-      const { error } = await supabase.from('cohorts').update({
-        name: form.name,
-        start_date: form.start_date,
-        end_date: form.end_date,
-        enrollment_open: form.enrollment_open,
-      }).eq('id', cohort.id);
-      if (error) {
-        toast.error('Could not save changes. Please try again.');
-        return;
-      }
-      toast.success('Cohort saved');
-      loadCohort();
+      }),
+    });
+    if (!res.ok) {
+      toast.error('Could not save cohort. Please try again.');
+      return;
     }
+    const payload = await res.json();
+    if (payload.cohort) setCohort(payload.cohort);
+    toast.success(cohort ? 'Cohort saved' : 'Cohort created');
+    loadCohort();
+    loadMetrics();
   };
 
   const handleRoleToggle = (p: Profile) => {
@@ -223,9 +166,14 @@ export default function AdminPage() {
       destructive: newRole !== 'admin',
       onConfirm: async () => {
         setConfirmDialog(prev => ({ ...prev, open: false }));
-        const { error } = await supabase.from('profiles').update({ role: newRole }).eq('id', p.id);
-        if (error) {
-          toast.error('Could not update role. Please try again.');
+        const res = await fetch('/api/admin/roles', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId: p.id, role: newRole }),
+        });
+        if (!res.ok) {
+          const payload = await res.json().catch(() => ({}));
+          toast.error(payload.error || 'Could not update role. Please try again.');
         } else {
           toast.success(`${p.username} is now ${newRole === 'admin' ? 'an admin' : 'a member'}`);
           loadProfiles();
@@ -236,13 +184,12 @@ export default function AdminPage() {
 
   const handleCreateReport = async (e: React.FormEvent) => {
     e.preventDefault();
-    const { data: { session } } = await supabase.auth.getSession();
-    const { error } = await supabase.from('reports').insert({
-      title: reportForm.title,
-      body: reportForm.body,
-      author_id: session?.user.id,
-    } as any);
-    if (error) {
+    const res = await fetch('/api/admin/reports', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(reportForm),
+    });
+    if (!res.ok) {
       toast.error('Could not publish report. Please try again.');
       return;
     }
@@ -253,13 +200,12 @@ export default function AdminPage() {
 
   const handleCreateCommunity = async (e: React.FormEvent) => {
     e.preventDefault();
-    const { data: { session } } = await supabase.auth.getSession();
-    const { error } = await supabase.from('community_posts').insert({
-      title: communityForm.title,
-      body: communityForm.body,
-      author_id: session?.user.id,
-    } as any);
-    if (error) {
+    const res = await fetch('/api/admin/community', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(communityForm),
+    });
+    if (!res.ok) {
       toast.error('Could not post announcement. Please try again.');
       return;
     }
@@ -270,30 +216,40 @@ export default function AdminPage() {
 
   const handleCreateTeam = async (e: React.FormEvent) => {
     e.preventDefault();
-    const { error } = await supabase.from('teams').insert({
-      name: teamForm.name,
-      startup_title: teamForm.startup_title,
-      startup_pitch: teamForm.startup_pitch,
-      cohort_id: cohort?.id || null,
-    } as any);
-    if (error) {
+    const res = await fetch('/api/admin/teams', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...teamForm, cohort_id: cohort?.id || null }),
+    });
+    if (!res.ok) {
       toast.error('Could not create team. Please try again.');
       return;
     }
     toast.success('Team created');
     setTeamForm({ name: '', startup_title: '', startup_pitch: '' });
+    loadMetrics();
   };
 
   const loadBugReports = async () => {
     setBugReportsLoading(true);
-    const { data } = await supabase.from('bug_reports').select('*').order('created_at', { ascending: false }).limit(50);
-    if (data) setBugReports(data as any);
-    setBugReportsLoading(false);
+    try {
+      const res = await fetch('/api/admin/bug-reports');
+      if (res.ok) {
+        const payload = await res.json();
+        setBugReports(payload.bugReports || []);
+      }
+    } finally {
+      setBugReportsLoading(false);
+    }
   };
 
   const updateBugReport = async (id: string, patch: any) => {
-    const { error } = await supabase.from('bug_reports').update(patch as any).eq('id', id);
-    if (error) {
+    const res = await fetch('/api/admin/bug-reports', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id, ...patch }),
+    });
+    if (!res.ok) {
       toast.error('Could not update report.');
     } else {
       toast.success('Report updated');
@@ -325,8 +281,8 @@ export default function AdminPage() {
           <div className="flex items-center justify-between gap-3 mb-2">
             <PageHeader
               icon={Settings}
-              title="Admin"
-              subtitle={role ? `Signed in as ${role}` : undefined}
+              title="Operator Console"
+              subtitle={role ? `Cohort control room · signed in as ${role}` : undefined}
               action={
                 <div className="flex items-center gap-2">
                   <a
@@ -371,11 +327,11 @@ export default function AdminPage() {
               {/* Tabs */}
               <div className="flex items-center gap-1 mb-5 border-b border-neutral-900 overflow-x-auto">
                 {([
-                  { id: 'daily', label: 'Daily' },
-                  { id: 'weekly', label: 'Weekly' },
-                  { id: 'setup', label: 'Setup' },
-                  { id: 'analytics', label: 'Analytics' },
-                  { id: 'support', label: 'Support' },
+                  { id: 'daily', label: 'Overview' },
+                  { id: 'weekly', label: 'Broadcasts' },
+                  { id: 'setup', label: 'Squads' },
+                  { id: 'analytics', label: 'Cohort Health' },
+                  { id: 'support', label: 'Signal Inbox' },
                   { id: 'demo', label: 'Demo seed' },
                 ] as { id: Tab; label: string }[]).map(({ id: t, label }) => (
                   <button
@@ -394,7 +350,7 @@ export default function AdminPage() {
               {tab === 'daily' && (
                 <div className="space-y-6">
                   {/* Cohort */}
-                  <SectionCard title="Cohort" icon={TrendingUp}>
+                  <SectionCard title="Contract Window" icon={TrendingUp}>
                     {loading ? (
                       <div className="text-sm text-neutral-500 animate-pulse">Loading…</div>
                     ) : (
@@ -424,7 +380,7 @@ export default function AdminPage() {
                   </SectionCard>
 
                   {/* Users */}
-                  <SectionCard title="Users & Roles" icon={Users}>
+                  <SectionCard title="Members & Access" icon={Users}>
                     {profilesLoading ? (
                       <div className="text-xs text-neutral-500 animate-pulse">Loading profiles…</div>
                     ) : profiles.length === 0 ? (
@@ -470,7 +426,7 @@ export default function AdminPage() {
               {tab === 'weekly' && (
                 <div className="space-y-6">
                   {/* Create Report */}
-                  <SectionCard title="Publish Report" icon={FileText}>
+                  <SectionCard title="Publish Field Note" icon={FileText}>
                     <form onSubmit={handleCreateReport} className="space-y-3">
                       <input type="text" required placeholder="Report title" value={reportForm.title} onChange={e => setReportForm({ ...reportForm, title: e.target.value })} className="w-full h-10 rounded-lg bg-neutral-900 border border-neutral-700 px-3 text-sm text-white placeholder-neutral-600 focus:outline-none focus:border-amber-500/60" />
                       <textarea required placeholder="Body" value={reportForm.body} onChange={e => setReportForm({ ...reportForm, body: e.target.value })} className="w-full h-28 rounded-lg bg-neutral-900 border border-neutral-700 px-3 py-2 text-sm text-white placeholder-neutral-600 focus:outline-none focus:border-amber-500/60 resize-y" />
@@ -481,7 +437,7 @@ export default function AdminPage() {
                   </SectionCard>
 
                   {/* Create Community Post */}
-                  <SectionCard title="Post Announcement" icon={MessageCircle}>
+                  <SectionCard title="Broadcast to Cohort" icon={MessageCircle}>
                     <form onSubmit={handleCreateCommunity} className="space-y-3">
                       <input type="text" required placeholder="Announcement title" value={communityForm.title} onChange={e => setCommunityForm({ ...communityForm, title: e.target.value })} className="w-full h-10 rounded-lg bg-neutral-900 border border-neutral-700 px-3 text-sm text-white placeholder-neutral-600 focus:outline-none focus:border-amber-500/60" />
                       <textarea required placeholder="Body" value={communityForm.body} onChange={e => setCommunityForm({ ...communityForm, body: e.target.value })} className="w-full h-28 rounded-lg bg-neutral-900 border border-neutral-700 px-3 py-2 text-sm text-white placeholder-neutral-600 focus:outline-none focus:border-amber-500/60 resize-y" />
@@ -495,7 +451,7 @@ export default function AdminPage() {
 
               {tab === 'setup' && (
                 <div className="space-y-6">
-                  <SectionCard title="Create Team" icon={Users}>
+                  <SectionCard title="Create Squad" icon={Users}>
                     <form onSubmit={handleCreateTeam} className="space-y-3">
                       <input type="text" required placeholder="Team name" value={teamForm.name} onChange={e => setTeamForm({ ...teamForm, name: e.target.value })} className="w-full h-10 rounded-lg bg-neutral-900 border border-neutral-700 px-3 text-sm text-white placeholder-neutral-600 focus:outline-none focus:border-amber-500/60" />
                       <input type="text" placeholder="Startup title" value={teamForm.startup_title} onChange={e => setTeamForm({ ...teamForm, startup_title: e.target.value })} className="w-full h-10 rounded-lg bg-neutral-900 border border-neutral-700 px-3 text-sm text-white placeholder-neutral-600 focus:outline-none focus:border-amber-500/60" />
@@ -505,7 +461,7 @@ export default function AdminPage() {
                       </button>
                     </form>
                     <p className="text-[11px] text-neutral-500 mt-3">
-                      After creating a team, you can add members from the Members tab. Teams are auto-assigned to the current cohort.
+                      Squads are the accountability layer. Create the room here; assign members through the access workflow.
                     </p>
                   </SectionCard>
                 </div>

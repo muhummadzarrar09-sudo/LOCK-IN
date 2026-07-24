@@ -42,45 +42,49 @@ export default function HomePage() {
           <div className="absolute bottom-[-20%] left-[-30%] w-[60vw] h-[60vw] rounded-full bg-amber-700/[0.02] blur-[150px]" />
         </div>
 
-        <div className="max-w-4xl mx-auto relative z-10">
-          <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-amber-900/20 border border-amber-900/30 text-amber-300 text-[10px] font-extrabold tracking-[0.2em] uppercase mb-8">
-            <Zap className="w-3 h-3" /> 30-Day Cohort — MVP Ready
+        <div className="max-w-6xl mx-auto relative z-10 grid lg:grid-cols-[1fr_460px] gap-12 lg:gap-16 items-center">
+          <div>
+            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-amber-900/20 border border-amber-900/30 text-amber-300 text-[10px] font-extrabold tracking-[0.2em] uppercase mb-8">
+              <Zap className="w-3 h-3" /> 30-Day Cohort — Operator Ready
+            </div>
+
+            <p className="text-amber-300/90 text-sm md:text-base font-semibold tracking-wide mb-4 uppercase text-[11px]">
+              You bought the course. Now finish the build.
+            </p>
+
+            <h1 className="font-serif text-5xl md:text-7xl lg:text-8xl leading-[0.9] tracking-tighter mb-6">
+              Discipline is not <br />
+              <span className="italic text-amber-300">a habit.</span><br />
+              It&apos;s a contract.
+            </h1>
+            <p className="text-neutral-400 text-lg md:text-xl max-w-xl leading-relaxed mb-10">
+              A private execution room for serious builders. Command Center. Squad Room. Visible chain. Proof of work. Thirty days of pressure that turns content into output.
+            </p>
+
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 sm:gap-4 mb-8">
+              <Link href="/auth/signup" className="inline-flex items-center justify-center gap-2.5 h-12 px-8 rounded-xl bg-amber-400 text-black font-extrabold text-sm tracking-wide hover:bg-amber-300 active:scale-[0.98] transition-all shadow-lg shadow-amber-400/10">
+                Enter the cohort <ArrowRight className="w-4 h-4" />
+              </Link>
+              <Link href="/auth/login" className="h-12 px-8 rounded-xl border border-neutral-700 text-neutral-300 font-semibold text-sm hover:bg-[#161616] hover:text-white transition-all inline-flex items-center justify-center">
+                I&apos;m already locked in
+              </Link>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-xs text-neutral-500 border-t border-neutral-900 pt-6">
+              <span className="inline-flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                <span className="text-neutral-300 font-bold">47 builders</span> locked in
+              </span>
+              <span className="inline-flex items-center gap-1.5">
+                <span className="text-neutral-300 font-bold">6 blocks/day</span> · visible to squad
+              </span>
+              <span className="inline-flex items-center gap-1.5">
+                <span className="text-neutral-300 font-bold">One contract</span>
+              </span>
+            </div>
           </div>
 
-          <p className="text-amber-300/90 text-sm md:text-base font-semibold tracking-wide mb-4 uppercase text-[11px]">
-            You bought the course. Now finish the build.
-          </p>
-
-          <h1 className="font-serif text-5xl md:text-7xl lg:text-8xl leading-[0.9] tracking-tighter mb-6">
-            Discipline is not <br />
-            <span className="italic text-amber-300">a habit.</span><br />
-            It&apos;s a contract.
-          </h1>
-          <p className="text-neutral-400 text-lg md:text-xl max-w-xl leading-relaxed mb-10">
-            A 30-day execution cohort for serious builders. Time-blocked days. Visible streaks. Teams of 3. Your team sees everything. Real consequences.
-          </p>
-
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 sm:gap-4 mb-8">
-            <Link href="/auth/signup" className="inline-flex items-center justify-center gap-2.5 h-12 px-8 rounded-xl bg-amber-400 text-black font-extrabold text-sm tracking-wide hover:bg-amber-300 active:scale-[0.98] transition-all shadow-lg shadow-amber-400/10">
-              Enroll in the cohort <ArrowRight className="w-4 h-4" />
-            </Link>
-            <Link href="/auth/login" className="h-12 px-8 rounded-xl border border-neutral-700 text-neutral-300 font-semibold text-sm hover:bg-[#161616] hover:text-white transition-all inline-flex items-center justify-center">
-              I&apos;m already a member
-            </Link>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-xs text-neutral-500 border-t border-neutral-900 pt-6">
-            <span className="inline-flex items-center gap-1.5">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-              <span className="text-neutral-300 font-bold">Members only</span> · No ads
-            </span>
-            <span className="inline-flex items-center gap-1.5">
-              <span className="text-neutral-300 font-bold">30 days</span> · One team
-            </span>
-            <span className="inline-flex items-center gap-1.5">
-              <span className="text-neutral-300 font-bold">One contract</span>
-            </span>
-          </div>
+          <LandingProductMockup />
         </div>
       </section>
 
@@ -167,6 +171,75 @@ export default function HomePage() {
     </main>
   );
 }
+
+function LandingProductMockup() {
+  const rows = [
+    { time: '06:00', label: 'Deep Work Block 1', status: 'locked' },
+    { time: '09:00', label: 'Protected Break', status: 'locked' },
+    { time: '09:30', label: 'Deep Work Block 2', status: 'live' },
+    { time: '12:00', label: 'Movement', status: 'next' },
+  ];
+
+  return (
+    <div className="relative hidden lg:block">
+      <div className="absolute -inset-8 rounded-full bg-amber-400/5 blur-3xl" />
+      <div className="relative rotate-1 rounded-[2rem] border border-amber-700/25 bg-[linear-gradient(135deg,rgba(18,18,18,0.96),rgba(13,13,13,0.98))] p-4 shadow-2xl shadow-amber-500/10">
+        <div className="rounded-[1.5rem] border border-neutral-800 bg-black/25 p-5">
+          <div className="flex items-center justify-between mb-5">
+            <div>
+              <p className="text-[9px] uppercase tracking-[0.3em] text-amber-300/70 font-black">Command Center</p>
+              <h3 className="text-xl font-black text-white mt-1">Day 14 / 30</h3>
+            </div>
+            <div className="text-right">
+              <p className="text-[9px] uppercase tracking-[0.2em] text-neutral-600 font-bold">Chain</p>
+              <p className="text-lg font-black text-amber-200">14d</p>
+            </div>
+          </div>
+          <div className="h-2 rounded-full bg-neutral-900 overflow-hidden mb-5">
+            <div className="h-full w-[47%] rounded-full bg-gradient-to-r from-amber-600 to-amber-200 shadow-[0_0_24px_rgba(240,176,48,0.35)]" />
+          </div>
+
+          <div className="rounded-2xl border border-amber-500/35 bg-amber-950/20 p-4 mb-4">
+            <div className="flex items-center gap-2 mb-2">
+              <span className="w-2 h-2 rounded-full bg-amber-300 animate-pulse" />
+              <span className="text-[9px] uppercase tracking-[0.24em] text-amber-300 font-black">Live now</span>
+            </div>
+            <h4 className="text-lg font-black text-amber-50">Deep Work Block 2</h4>
+            <p className="text-xs text-amber-100/60 mt-1">Your squad sees this lock.</p>
+            <div className="mt-4 h-10 rounded-xl bg-amber-300 text-black font-black text-xs flex items-center justify-center">
+              Lock this block
+            </div>
+          </div>
+
+          <div className="space-y-2 mb-4">
+            {rows.map((row) => (
+              <div key={row.time} className={`flex items-center gap-3 rounded-xl border p-3 ${row.status === 'live' ? 'border-amber-500/35 bg-amber-950/10' : 'border-neutral-900 bg-neutral-950/40'}`}>
+                <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${row.status === 'locked' ? 'bg-emerald-400 text-black' : row.status === 'live' ? 'bg-amber-300 text-black' : 'bg-neutral-800 text-neutral-500'}`}>
+                  <CheckCircle2 className="w-3.5 h-3.5" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-black text-white truncate">{row.label}</p>
+                  <p className="text-[10px] font-mono text-neutral-600">{row.time}</p>
+                </div>
+                <span className="text-[9px] uppercase tracking-wider text-neutral-500 font-bold">{row.status}</span>
+              </div>
+            ))}
+          </div>
+
+          <div className="rounded-2xl border border-neutral-800 bg-[#121212]/70 p-4">
+            <p className="text-[9px] uppercase tracking-[0.24em] text-neutral-500 font-black mb-2">Squad Pulse</p>
+            <div className="space-y-1.5 text-xs text-neutral-300">
+              <p>Maya locked 4 blocks today.</p>
+              <p>Omar logged proof 18m ago.</p>
+              <p className="text-amber-300">You&apos;re 1 lock behind squad avg.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 
 function FeatureCard({ icon: Icon, title, desc }: { icon: any; title: string; desc: string }) {
   return (

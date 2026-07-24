@@ -27,7 +27,7 @@ const FAQ: FaqItem[] = [
   { cat: 'account', q: 'How do I change my timezone?', a: <>Settings → Edit profile → change timezone. The dashboard uses this for time-block scheduling. If you travel, update it and the dashboard recalculates your &ldquo;now&rdquo; highlight.</> },
   { cat: 'account', q: 'How do I delete my account?', a: <>Go to <Link href="/settings/delete" className="text-amber-300 hover:text-amber-200 underline">Settings → Delete account</Link>. We&apos;ll ask you to confirm, then permanently delete your profile, check-ins, team feed posts, and streaks. This is irreversible.</> },
   { cat: 'account', q: 'I\'m not getting reminders. What\'s wrong?', a: <>Open <Link href="/settings" className="text-amber-300 hover:text-amber-200 underline">Settings → Reminders</Link>. You&apos;ll see a permission banner if your browser is blocking notifications. Click &ldquo;Enable reminders&rdquo; and approve the browser prompt.</> },
-  { cat: 'account', q: 'Can I export my data?', a: <>Email <a href="mailto:support@accountability.com" className="text-amber-300 hover:text-amber-200 underline">support@accountability.com</a> and we&apos;ll send you a JSON export of your profile, check-ins, streaks, and team feed posts within 48 hours.</> },
+  { cat: 'account', q: 'Can I export my data?', a: <>Email <a href="mailto:support@lockin.app" className="text-amber-300 hover:text-amber-200 underline">support@lockin.app</a> and we&apos;ll send you a JSON export of your profile, check-ins, streaks, and team feed posts within 48 hours.</> },
 ];
 
 const CATS = [
@@ -151,7 +151,7 @@ export default function HelpPage() {
                 </p>
                 <div className="flex flex-wrap items-center gap-2">
                   <a
-                    href="mailto:support@accountability.com"
+                    href="mailto:support@lockin.app"
                     className="h-9 px-4 rounded-lg bg-amber-400 text-black font-extrabold text-xs hover:bg-amber-300 inline-flex items-center gap-2 transition-colors"
                   >
                     <Mail className="w-3.5 h-3.5" /> Email support

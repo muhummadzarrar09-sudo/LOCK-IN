@@ -48,8 +48,8 @@ export default function PeoplePage() {
     // Choose the right source based on sort key
     if (sort === 'recent') {
       const { data, error } = await supabase
-        .from('profiles')
-        .select('id, username, role, created_at')
+        .from('public_profiles')
+        .select('id, username, created_at')
         .order('created_at', { ascending: false })
         .range(from, to);
       if (error) throw error;
@@ -133,7 +133,7 @@ export default function PeoplePage() {
       try {
         const todayISO = new Date().toISOString().slice(0, 10);
         const [{ count: totalCount }, { data: todayCheckIns }] = await Promise.all([
-          supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('role', 'member'),
+          supabase.from('public_profiles').select('*', { count: 'exact', head: true }),
           supabase.from('check_ins').select('user_id').gte('completed_at', `${todayISO}T00:00:00Z`),
         ]);
         if (!cancelled) {

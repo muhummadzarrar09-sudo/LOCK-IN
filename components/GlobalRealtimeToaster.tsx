@@ -70,7 +70,7 @@ export function GlobalRealtimeToaster() {
       markSelf(row.id);
       return;
     }
-    const { data: prof } = await supabase.from('profiles').select('username').eq('id', row.user_id).maybeSingle();
+    const { data: prof } = await supabase.from('public_profiles').select('username').eq('id', row.user_id).maybeSingle();
     const who = (prof as any)?.username || 'A teammate';
     toast.info(`${who} just shipped an update`);
   });

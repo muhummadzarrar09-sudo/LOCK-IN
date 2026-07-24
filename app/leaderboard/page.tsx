@@ -50,7 +50,7 @@ export default function LeaderboardPage() {
       const [{ data: { session } }] = await Promise.all([supabase.auth.getSession()]);
       if (session) setCurrentUserId(session.user.id);
       // Cohort avg: use the full count from a quick count query
-      const { count } = await supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('role', 'member');
+      const { count } = await supabase.from('public_profiles').select('*', { count: 'exact', head: true });
       const { data: allStreaks } = await supabase.from('streaks').select('current_streak');
       const total = (allStreaks || []).reduce((s, x: any) => s + (x.current_streak || 0), 0);
       const denom = count || (allStreaks?.length || 1);
@@ -111,8 +111,8 @@ export default function LeaderboardPage() {
         <div className="max-w-2xl mx-auto">
           <PageHeader
             icon={Trophy}
-            title="Leaderboard"
-            subtitle={`Ranked by streak · Cohort average: ${cohortAvg} day${cohortAvg === 1 ? '' : 's'}`}
+            title="The Board"
+            subtitle={`Ranked by chain · Cohort average: ${cohortAvg} day${cohortAvg === 1 ? '' : 's'}`}
           />
 
           {activeToday !== null && totalMembers !== null && totalMembers > 0 && (
@@ -130,13 +130,13 @@ export default function LeaderboardPage() {
             <div className="mb-6 rounded-2xl border border-amber-500/40 bg-gradient-to-br from-amber-500/10 to-amber-700/5 p-5">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-[10px] uppercase tracking-[0.2em] text-amber-300/80 font-bold mb-1">Your rank</p>
+                  <p className="text-[10px] uppercase tracking-[0.2em] text-amber-300/80 font-bold mb-1">Your position</p>
                   <p className="text-3xl font-black text-amber-100">
                     #{myEntry.rank} <span className="text-sm text-amber-300/70 font-bold">of {rows.length}+</span>
                   </p>
                 </div>
                 <div className="text-right">
-                  <p className="text-[10px] uppercase tracking-[0.2em] text-neutral-500 font-bold mb-1">Streak</p>
+                  <p className="text-[10px] uppercase tracking-[0.2em] text-neutral-500 font-bold mb-1">Chain</p>
                   <p className="text-2xl font-black text-amber-200">{myEntry.streak}</p>
                 </div>
               </div>
@@ -180,7 +180,7 @@ export default function LeaderboardPage() {
             <>
               {topThree.length > 0 && (
                 <div className="mb-6">
-                  <h2 className="text-[10px] font-extrabold text-neutral-500 uppercase tracking-[0.2em] mb-3">Top of cohort</h2>
+                  <h2 className="text-[10px] font-extrabold text-neutral-500 uppercase tracking-[0.2em] mb-3">Top chains</h2>
                   <Podium entries={topThree} currentUserId={currentUserId} />
                 </div>
               )}

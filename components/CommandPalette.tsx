@@ -1,8 +1,7 @@
 'use client';
 import { useEffect, useState, useMemo, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { Search, ArrowRight, Home, Trophy, Users, FileText, MessageCircle, LifeBuoy, Settings, Sliders, LogIn, UserPlus, X, Sparkles, Calendar } from 'lucide-react';
-import { supabase } from '@/lib/supabase';
+import { Search, ArrowRight, Home, Trophy, Users, FileText, MessageCircle, LifeBuoy, Sliders, LogIn, UserPlus, X, Sparkles, Calendar } from 'lucide-react';
 
 type Item = {
   id: string;
@@ -76,28 +75,11 @@ export function CommandPalette() {
     }
     const handle = setTimeout(async () => {
       const q = query.trim();
-      const like = `%${q}%`;
-      const [membersRes, reportsRes, communityRes] = await Promise.all([
-        supabase
-          .from('profiles')
-          .select('id, username')
-          .ilike('username', like)
-          .limit(6),
-        supabase
-          .from('reports')
-          .select('id, title, body')
-          .or(`title.ilike.${like},body.ilike.${like}`)
-          .order('created_at', { ascending: false })
-          .limit(6),
-        supabase
-          .from('community_posts')
-          .select('id, title, body')
-          .or(`title.ilike.${like},body.ilike.${like}`)
-          .order('created_at', { ascending: false })
-          .limit(6),
-      ]);
+      const res = await fetch(`/api/search?type=all&q=${encodeURIComponent(q)}&limit=6`);
+      if (!res.ok) return;
+      const payload = await res.json();
       setMemberResults(
-        (membersRes.data || []).map((m: any) => ({
+        (payload.members || []).map((m: any) => ({
           id: `m-${m.id}`,
           label: m.username,
           hint: 'Member',
@@ -108,7 +90,7 @@ export function CommandPalette() {
         }))
       );
       setReportResults(
-        (reportsRes.data || []).map((r: any) => ({
+        (payload.reports || []).map((r: any) => ({
           id: `r-${r.id}`,
           label: r.title,
           hint: r.body?.slice(0, 70) || 'Report',
@@ -119,14 +101,14 @@ export function CommandPalette() {
         }))
       );
       setCommunityResults(
-        (communityRes.data || []).map((p: any) => ({
-          id: `c-${p.id}`,
-          label: p.title,
-          hint: p.body?.slice(0, 70) || 'Announcement',
-          href: `/community#${p.id}`,
+        (payload.community || []).map((post: any) => ({
+          id: `c-${post.id}`,
+          label: post.title,
+          hint: post.body?.slice(0, 70) || 'Announcement',
+          href: `/community#${post.id}`,
           icon: <MessageCircle className="w-4 h-4" />,
           group: 'Announcements',
-          meta: p,
+          meta: post,
         }))
       );
     }, 200);

@@ -48,7 +48,7 @@ export function CookieConsent() {
           <div className="flex-1 min-w-0">
             <p className="text-sm font-extrabold text-white">Cookies, briefly.</p>
             <p className="text-[11px] text-neutral-400 leading-relaxed mt-1">
-              We use only functional cookies to keep you signed in (managed by Supabase). No tracking, no ads, no analytics.{' '}
+              We use only functional cookies to keep you signed in for your account. No tracking, no ads, no analytics.{' '}
               <Link href="/privacy" className="text-amber-300 hover:text-amber-200 underline underline-offset-2">Privacy policy</Link>
             </p>
           </div>
