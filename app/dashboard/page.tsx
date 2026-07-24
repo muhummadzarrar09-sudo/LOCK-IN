@@ -14,6 +14,7 @@ import { AchievementCelebration } from '@/components/AchievementCelebration';
 import { DashboardTeamPulse } from '@/components/DashboardTeamPulse';
 import { NextMilestone } from '@/components/NextMilestone';
 import { WeeklyRecapModal } from '@/components/WeeklyRecapModal';
+import { CohortComparison } from '@/components/CohortComparison';
 import { ACHIEVEMENTS, AchievementCode, getAchievement } from '@/lib/achievements';
 
 type BlockType = 'work' | 'break' | 'movement' | 'reflection';
@@ -447,6 +448,15 @@ export default function DashboardPage() {
               streak={streak}
               bestStreak={bestStreak}
               totalDays={cohortDayInfo.total}
+            />
+          )}
+
+          {/* Cohort comparison: rank, percentile, head-to-head */}
+          {!cohortDayInfo.isPreCohort && !cohortDayInfo.isPostCohort && (
+            <CohortComparison
+              userId={userId || ''}
+              currentStreak={streak}
+              currentBest={bestStreak}
             />
           )}
 
