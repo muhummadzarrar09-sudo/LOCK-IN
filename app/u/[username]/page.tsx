@@ -39,8 +39,8 @@ export default function PublicProfilePage() {
       setNotFound(false);
       // Look up profile by username
       const { data: prof, error: profErr } = await supabase
-        .from('profiles')
-        .select('id, username, role, created_at')
+        .from('public_profiles')
+        .select('id, username, created_at')
         .eq('username', username)
         .maybeSingle();
       if (profErr || !prof) {
@@ -51,10 +51,10 @@ export default function PublicProfilePage() {
       // Fetch streak + achievements + team in parallel
       const [streakRes, achRes, teamRes] = await Promise.all([
         supabase
-          .from('streaks')
-          .select('current_streak, best_streak, last_check_in_date')
-          .eq('user_id', prof.id)
-          .maybeSingle(),
+          .from('leaderboard')
+          .select('streak, best_streak')
+          .eq('id', prof.id)
+          .maybeSingle(), 
         supabase
           .from('achievements')
           .select('code, earned_at')
@@ -70,7 +70,8 @@ export default function PublicProfilePage() {
 
       setProfile({
         ...(prof as any),
-        streak: streakRes.data as any,
+        role: 'member',
+        streak: streakRes.data ? { current_streak: (streakRes.data as any).streak || 0, best_streak: (streakRes.data as any).best_streak || 0, last_check_in_date: null } : null,
         achievements: (achRes.data as any[]) || [],
         team: teamRes.data
           ? { team_id: (teamRes.data as any).team_id, name: (teamRes.data as any).teams?.name, startup_title: (teamRes.data as any).teams?.startup_title }
@@ -83,18 +84,21 @@ export default function PublicProfilePage() {
         const { data: { session } } = await supabase.auth.getSession();
         const isSelf = session && session.user.id === prof.id;
         if (session && !isSelf) {
-          await supabase.from('profile_views').insert({
-            viewed_user_id: prof.id,
-            viewer_user_id: session.user.id,
-          } as any);
+          await fetch('/api/profile-views', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ viewedUserId: prof.id }),
+          });
         }
-        // Fetch view count (RLS already limits to own, but we're counting a public profile
-        // so this is allowed for any authed user — we read aggregate via count).
-        const { count } = await supabase
-          .from('profile_views')
-          .select('*', { count: 'exact', head: true })
-          .eq('viewed_user_id', prof.id);
-        setViewCount(count || 0);
+        if (isSelf) {
+          const { count } = await supabase
+            .from('profile_views')
+            .select('*', { count: 'exact', head: true })
+            .eq('viewed_user_id', prof.id);
+          setViewCount(count || 0);
+        } else {
+          setViewCount(0);
+        }
       } catch { /* non-fatal */ }
     })();
   }, [username]);

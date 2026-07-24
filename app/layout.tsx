@@ -1,5 +1,6 @@
 import './globals.css';
 import type { Metadata, Viewport } from 'next';
+import { headers } from 'next/headers';
 import { ToastProvider } from '@/components/Toast';
 import { InstallPrompt } from '@/components/InstallPrompt';
 import { ServiceWorkerRegistrar } from '@/components/ServiceWorkerRegistrar';
@@ -79,7 +80,9 @@ export const viewport: Viewport = {
   viewportFit: 'cover',
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  const nonce = (await headers()).get('x-nonce') || undefined;
+
   return (
     <html lang="en" className="dark">
       <head>
@@ -96,6 +99,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             to avoid duplicating RLS-protected queries on hover. */}
         <script
           type="speculationrules"
+          nonce={nonce}
           dangerouslySetInnerHTML={{
             __html: JSON.stringify({
               prefetch: [

@@ -1,8 +1,7 @@
 "use client";
 import { useEffect, useState } from 'react';
-import { supabase } from '@/lib/supabase';
 import { useToast } from '@/components/Toast';
-import { TrendingUp, Users, Activity, Download, RefreshCw } from 'lucide-react';
+import { TrendingUp, Download, RefreshCw } from 'lucide-react';
 import { Skeleton } from '@/components/Skeleton';
 
 type DailyActive = { day: string; active_members: number; total_checkins: number };
@@ -38,165 +37,11 @@ export function AnalyticsTab() {
   const load = async () => {
     setLoading(true);
     try {
-      // Pull all stats in parallel
-      const [
-        { count: totalMembers },
-        { data: streaksData },
-        { data: profilesData },
-        { data: checkInsData },
-        { count: totalTeams },
-        { count: totalReports },
-        { count: totalCommunityPosts },
-        { count: totalAchievements },
-        { count: totalFreezes },
-        { data: dailyActiveData },
-        { data: allUsernames },
-        { data: allTeamLog },
-      ] = await Promise.all([
-        supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('role', 'member'),
-        supabase.from('streaks').select('current_streak, best_streak'),
-        supabase.from('profiles').select('created_at').eq('role', 'member'),
-        supabase.from('check_ins').select('user_id, completed_at'),
-        supabase.from('teams').select('*', { count: 'exact', head: true }),
-        supabase.from('reports').select('*', { count: 'exact', head: true }),
-        supabase.from('community_posts').select('*', { count: 'exact', head: true }),
-        supabase.from('achievements').select('*', { count: 'exact', head: true }),
-        supabase.from('streak_freezes').select('*', { count: 'exact', head: true }),
-        supabase.from('cohort_daily_active').select('*').limit(30),
-        supabase.from('profiles').select('id, username').eq('role', 'member'),
-        supabase.from('team_startup_log').select('user_id'),
-      ]);
-
-      // Compute stats
-      const streaks = (streaksData || []) as any[];
-      const checkIns = (checkInsData || []) as any[];
-      const profiles = (profilesData || []) as any[];
-
-      const todayISO = new Date().toISOString().slice(0, 10);
-      const todayUsers = new Set(checkIns.filter((c) => c.completed_at?.slice(0, 10) === todayISO).map((c) => c.user_id));
-      const avg = streaks.length ? streaks.reduce((s, x) => s + (x.current_streak || 0), 0) / streaks.length : 0;
-      const best = streaks.reduce((m, x) => Math.max(m, x.best_streak || 0), 0);
-      const sorted = [...streaks.map((s) => s.current_streak || 0)].sort((a, b) => a - b);
-      const median = sorted.length ? sorted[Math.floor(sorted.length / 2)] : 0;
-
-      // Average check-ins per active day per user
-      const userDays = new Map<string, Set<string>>();
-      checkIns.forEach((c) => {
-        const day = c.completed_at?.slice(0, 10);
-        if (!day) return;
-        if (!userDays.has(c.user_id)) userDays.set(c.user_id, new Set());
-        userDays.get(c.user_id)!.add(day);
-      });
-      const blocksPerDay = Array.from(userDays.values()).reduce((s, days) => s + days.size, 0) / Math.max(streaks.length, 1);
-
-      // Retention curve: for each day 1..30, what % of members have at least 1 check-in
-      const cohortStart = (() => {
-        const earliest = profiles
-          .map((p) => p.created_at)
-          .filter(Boolean)
-          .sort()[0];
-        if (!earliest) return null;
-        return new Date(earliest);
-      })();
-      const daysSinceStart = cohortStart
-        ? Math.min(30, Math.floor((Date.now() - cohortStart.getTime()) / (1000 * 60 * 60 * 24)) + 1)
-        : 1;
-
-      const retention: { day: number; pct_active: number; pct_completed_full: number }[] = [];
-      for (let d = 1; d <= Math.max(daysSinceStart, 7); d++) {
-        const dayStart = new Date(cohortStart || new Date());
-        dayStart.setDate(dayStart.getDate() + d - 1);
-        const dayISO = dayStart.toISOString().slice(0, 10);
-        const activeOnDay = new Set(checkIns.filter((c) => c.completed_at?.slice(0, 10) === dayISO).map((c) => c.user_id));
-        const completedFullOnDay = new Set(
-          checkIns.filter((c) => c.completed_at?.slice(0, 10) === dayISO).map((c) => c.user_id)
-        );
-        retention.push({
-          day: d,
-          pct_active: totalMembers ? (activeOnDay.size / totalMembers) * 100 : 0,
-          pct_completed_full: totalMembers ? (completedFullOnDay.size / totalMembers) * 100 : 0,
-        });
-      }
-
-      // Top members by check-in count
-      const checkInCounts = new Map<string, number>();
-      checkIns.forEach((c) => checkInCounts.set(c.user_id, (checkInCounts.get(c.user_id) || 0) + 1));
-
-      // Check-ins by hour of day (UTC for simplicity — could be cohort TZ)
-      const byHour = new Array(24).fill(0);
-      checkIns.forEach((c) => {
-        const h = new Date(c.completed_at).getUTCHours();
-        byHour[h] = (byHour[h] || 0) + 1;
-      });
-      const maxHour = byHour.reduce<{ hour: number; count: number } | null>((acc, count, hour) => {
-        if (acc === null || count > acc.count) return { hour, count };
-        return acc;
-      }, null);
-      const peakHour = maxHour && maxHour.count > 0 ? maxHour : null;
-      const streakMap = new Map<string, { current: number; best: number }>();
-      streaks.forEach((s) => streakMap.set(s.user_id, { current: s.current_streak || 0, best: s.best_streak || 0 }));
-      const usernameMap = new Map<string, string>();
-      (allUsernames || []).forEach((p: any) => usernameMap.set(p.id, p.username));
-      const topMembers: TopMember[] = Array.from(checkInCounts.entries())
-        .map(([id, count]) => ({
-          id,
-          username: usernameMap.get(id) || 'unknown',
-          check_ins: count,
-          current_streak: streakMap.get(id)?.current || 0,
-          best_streak: streakMap.get(id)?.best || 0,
-        }))
-        .sort((a, b) => b.check_ins - a.check_ins)
-        .slice(0, 5);
-
-      // Top team-feed posters
-      const postCounts = new Map<string, number>();
-      (allTeamLog || []).forEach((l: any) => postCounts.set(l.user_id, (postCounts.get(l.user_id) || 0) + 1));
-      const topPosters: TopPoster[] = Array.from(postCounts.entries())
-        .map(([id, posts]) => ({ id, username: usernameMap.get(id) || 'unknown', posts }))
-        .sort((a, b) => b.posts - a.posts)
-        .slice(0, 5);
-
-      // Members who might need a nudge: 0 check-ins in the last 3 days
-      const threeDaysAgo = new Date();
-      threeDaysAgo.setDate(threeDaysAgo.getDate() - 3);
-      const threeDaysAgoISO = threeDaysAgo.toISOString();
-      const recentActive = new Set(
-        checkIns.filter((c) => c.completed_at >= threeDaysAgoISO).map((c) => c.user_id)
-      );
-      const allMemberIds = Array.from(usernameMap.keys());
-      const needsNudge: TopMember[] = allMemberIds
-        .filter((id) => !recentActive.has(id))
-        .map((id) => ({
-          id,
-          username: usernameMap.get(id) || 'unknown',
-          check_ins: checkInCounts.get(id) || 0,
-          current_streak: streakMap.get(id)?.current || 0,
-          best_streak: streakMap.get(id)?.best || 0,
-        }))
-        .sort((a, b) => a.current_streak - b.current_streak) // weakest streaks first
-        .slice(0, 5);
-
-      setMetrics({
-        total_members: totalMembers || 0,
-        active_today: todayUsers.size,
-        avg_streak: Math.round(avg * 10) / 10,
-        best_streak: best,
-        median_streak: median,
-        cohort_avg_blocks_per_day: Math.round(blocksPerDay * 10) / 10,
-        total_check_ins: checkIns.length,
-        total_teams: totalTeams || 0,
-        total_reports: totalReports || 0,
-        total_community_posts: totalCommunityPosts || 0,
-        total_achievements: totalAchievements || 0,
-        total_streak_freezes: totalFreezes || 0,
-        retention_by_day: retention,
-        top_members: topMembers,
-        top_posters: topPosters,
-        needs_nudge: needsNudge,
-        peak_hour: peakHour,
-        checkins_by_hour: byHour,
-      });
-      setDailyActive((dailyActiveData || []) as DailyActive[]);
+      const res = await fetch('/api/admin/analytics');
+      if (!res.ok) throw new Error('analytics request failed');
+      const payload = await res.json();
+      setMetrics(payload.metrics as CohortMetrics);
+      setDailyActive((payload.dailyActive || []) as DailyActive[]);
     } catch (e) {
       console.warn('analytics load failed', e);
       toast.error('Could not load analytics.');

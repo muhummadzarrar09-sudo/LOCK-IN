@@ -12,6 +12,15 @@ routes = [
   { pattern = "www.lockin.app/*", custom_domain = true },
 ]
 
+[durable_objects]
+bindings = [
+  { name = "RATE_LIMITER", class_name = "RateLimiter" },
+]
+
+[[migrations]]
+tag = "v1"
+new_classes = ["RateLimiter"]
+
 # Environment variables (set in Cloudflare dashboard for secrets)
 # BACKEND_URL is required — set to your Vercel deployment URL
 [vars]

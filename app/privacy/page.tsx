@@ -36,7 +36,7 @@ export default function PrivacyPage() {
               <li><strong>Account info</strong> — your email, username, and timezone.</li>
               <li><strong>Cohort data</strong> — time blocks, check-ins, streaks, team membership, team feed posts.</li>
               <li><strong>Notifications</strong> — your reminder preferences, stored in your browser.</li>
-              <li><strong>Authentication data</strong> — managed by Supabase. We never see your password.</li>
+              <li><strong>Authentication data</strong> — managed by our secure authentication provider. We never see your password.</li>
             </ul>
           </Section>
 
@@ -58,7 +58,7 @@ export default function PrivacyPage() {
           </Section>
 
           <Section title="Where your data lives">
-            <p>All data is stored in Supabase (Postgres + Auth). Reports and community posts cached for offline reading are stored in your browser&apos;s local storage and the PWA cache.</p>
+            <p>Your data is stored in a secure managed database and authentication system. Reports and community posts cached for offline reading are stored in your browser&apos;s local storage and the PWA cache.</p>
           </Section>
 
           <Section title="Your rights">
@@ -66,16 +66,16 @@ export default function PrivacyPage() {
             <ul>
               <li>View, edit, or delete your profile data from the Settings page.</li>
               <li>Export your data by contacting support.</li>
-              <li>Delete your account by emailing <a href="mailto:support@accountability.com" className="text-amber-300 hover:text-amber-200 underline">support@accountability.com</a>.</li>
+              <li>Delete your account by emailing <a href="mailto:support@lockin.app" className="text-amber-300 hover:text-amber-200 underline">support@lockin.app</a>.</li>
             </ul>
           </Section>
 
           <Section title="Cookies">
-            <p>We use only functional cookies required for authentication (managed by Supabase). No analytics cookies. No advertising cookies.</p>
+            <p>We use only functional cookies required for authentication (managed by our secure authentication provider). No analytics cookies. No advertising cookies.</p>
           </Section>
 
           <Section title="Contact">
-            <p>Questions? Email <a href="mailto:support@accountability.com" className="text-amber-300 hover:text-amber-200 underline">support@accountability.com</a>.</p>
+            <p>Questions? Email <a href="mailto:support@lockin.app" className="text-amber-300 hover:text-amber-200 underline">support@lockin.app</a>.</p>
           </Section>
         </div>
       </div>

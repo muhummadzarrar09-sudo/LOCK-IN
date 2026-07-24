@@ -128,12 +128,10 @@ function SettingsPageInner() {
 
     setSavingProfile(true);
     try {
-      const { error } = await supabase.from('profiles').upsert({
-        id: userId,
+      const { error } = await supabase.from('profiles').update({
         username: profileForm.username,
         timezone: profileForm.timezone,
-        email: userEmail,
-      } as any, { onConflict: 'id' });
+      } as any).eq('id', userId);
       if (error) {
         toast.error('Could not save profile. Please try again.');
       } else {
@@ -160,20 +158,25 @@ function SettingsPageInner() {
     }
     setSendingReport(true);
     try {
-      const { error } = await supabase.from('bug_reports').insert({
-        user_id: userId,
-        user_email: userEmail,
-        body: reportText.trim(),
-        url: typeof window !== 'undefined' ? window.location.href : null,
-        user_agent: typeof navigator !== 'undefined' ? navigator.userAgent : null,
-      } as any);
-      if (error) throw error;
+      const res = await fetch('/api/bug-reports', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          body: reportText.trim(),
+          url: typeof window !== 'undefined' ? window.location.href : null,
+          user_agent: typeof navigator !== 'undefined' ? navigator.userAgent : null,
+        }),
+      });
+      if (!res.ok) {
+        const payload = await res.json().catch(() => ({}));
+        throw new Error(payload.error || 'Could not send report');
+      }
       toast.success('Report sent. Thank you.');
       setReportOpen(false);
       setReportText('');
     } catch (err: any) {
       console.warn('bug report submit failed:', err);
-      toast.error('Could not send. Please email support@accountability.com directly.');
+      toast.error('Could not send. Please email support@lockin.app directly.');
     } finally {
       setSendingReport(false);
     }
@@ -476,10 +479,10 @@ function SettingsPageInner() {
                 <Sparkles className="w-3.5 h-3.5" /> Replay welcome
               </button>
               <a
-                href="mailto:support@accountability.com"
+                href="mailto:support@lockin.app"
                 className="text-xs text-amber-300 hover:text-amber-200 font-semibold underline underline-offset-4 ml-auto self-center"
               >
-                support@accountability.com
+                support@lockin.app
               </a>
             </div>
           </section>

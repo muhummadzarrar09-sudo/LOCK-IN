@@ -1,6 +1,6 @@
 "use client";
 import { useState, useEffect, useCallback } from 'react';
-import { FileText, WifiOff, Clock, X, Search } from 'lucide-react';
+import { FileText, Clock, X, Search, CheckCircle2, MessageCircle } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import Navbar from '@/components/Navbar';
 import PageHeader from '@/components/PageHeader';
@@ -42,16 +42,13 @@ export default function ReportsPage() {
     const useWideRange = debouncedQuery.trim().length > 0;
     let data: any[] = [];
     if (useWideRange) {
-      // Search by title/body across the whole table, then paginate the matches.
+      // Search is routed through a server endpoint so we can validate, rate
+      // limit, and keep PostgREST filter construction off the client.
       const q = debouncedQuery.trim();
-      const { data: byTitle, error: e1 } = await supabase
-        .from('reports')
-        .select('*')
-        .or(`title.ilike.%${q}%,body.ilike.%${q}%`)
-        .order('created_at', { ascending: false })
-        .range(page * pageSize, page * pageSize + pageSize - 1);
-      if (e1) throw e1;
-      data = byTitle || [];
+      const res = await fetch(`/api/search?type=reports&q=${encodeURIComponent(q)}&page=${page}&limit=${pageSize}`);
+      if (!res.ok) throw new Error('Search failed');
+      const payload = await res.json();
+      data = payload.reports || [];
     } else {
       const from = page * pageSize;
       const to = from + pageSize - 1;
@@ -82,8 +79,8 @@ export default function ReportsPage() {
         <div className="max-w-3xl mx-auto">
           <PageHeader
             icon={FileText}
-            title="Reports"
-            subtitle="Curated by your cohort lead · Available offline"
+            title="Field Notes"
+            subtitle="Read less. Apply more. Curated for execution."
           />
 
           <div className="mb-5 relative">
@@ -92,7 +89,7 @@ export default function ReportsPage() {
               type="search"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search reports…"
+              placeholder="Search field notes…"
               className="w-full h-10 pl-10 pr-4 rounded-lg bg-neutral-900/60 border border-neutral-800 text-sm text-white placeholder-neutral-500 focus:outline-none focus:border-amber-500/60 focus:ring-1 focus:ring-amber-500/20 transition-all"
             />
           </div>
@@ -108,8 +105,8 @@ export default function ReportsPage() {
           ) : rows.length === 0 ? (
             <EmptyState
               icon={FileText}
-              title="No reports published yet"
-              description="Your cohort lead will publish reports here. They'll be cached for offline reading once they arrive."
+              title="First field note drops soon"
+              description="Your cohort lead will publish execution notes here. The goal is application, not consumption."
             />
           ) : filtered.length === 0 ? (
             <div className="rounded-2xl border border-neutral-800 bg-[#121212]/60 p-8 text-center">
@@ -144,7 +141,7 @@ export default function ReportsPage() {
                         {new Date(r.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                       </span>
                       <span className="inline-flex items-center gap-1.5 text-[10px] text-emerald-300/80 font-semibold">
-                        <WifiOff className="w-3 h-3" /> Available offline
+                        <CheckCircle2 className="w-3 h-3" /> Apply this
                       </span>
                     </div>
                   </button>
@@ -187,6 +184,14 @@ export default function ReportsPage() {
             </div>
             <div className="border-t border-neutral-800 pt-4 text-sm text-neutral-200 leading-relaxed whitespace-pre-wrap">
               {selected.body}
+            </div>
+            <div className="mt-6 pt-4 border-t border-neutral-800 flex flex-wrap gap-2">
+              <button className="h-9 px-3 rounded-lg bg-amber-300 text-black text-xs font-black inline-flex items-center gap-2">
+                <CheckCircle2 className="w-3.5 h-3.5" /> Mark as applied
+              </button>
+              <a href="/team" className="h-9 px-3 rounded-lg bg-neutral-900 border border-neutral-800 text-neutral-300 text-xs font-bold inline-flex items-center gap-2 hover:border-amber-500/30 hover:text-amber-200 transition-colors">
+                <MessageCircle className="w-3.5 h-3.5" /> Discuss with squad
+              </a>
             </div>
           </div>
         </div>

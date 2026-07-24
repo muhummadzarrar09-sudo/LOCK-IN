@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { CheckCircle2, Circle, XCircle, Flame, Shield, LogOut, Info, X, Sparkles, Trophy, PartyPopper, Share2, Calendar, Image as ImageIcon } from 'lucide-react';
+import { CheckCircle2, Circle, XCircle, Flame, Shield, LogOut, Info, X, Sparkles, Trophy, PartyPopper, Share2, Calendar, Image as ImageIcon, Radio, LockKeyhole, TimerReset, Target, Users } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import Navbar from '@/components/Navbar';
 import PageHeader from '@/components/PageHeader';
@@ -157,60 +157,14 @@ export default function DashboardPage() {
     init();
   }, [router]);
 
-  const loadOrCreateTimeBlocks = async (uid: string) => {
+  const loadOrCreateTimeBlocks = async (_uid: string) => {
     setLoadingBlocks(true);
     try {
-      // Try fetch existing blocks for user
-      const { data: existingBlocks, error } = await supabase
-        .from('time_blocks')
-        .select('*')
-        .eq('user_id', uid)
-        .order('start_time', { ascending: true });
-
-      if (error) {
-        console.warn('time_blocks fetch error:', error.message);
-      }
-
-      let dbBlocks = existingBlocks || [];
-
-      // If none, create from template
-      if (dbBlocks.length === 0) {
-        const toInsert = DEFAULT_TEMPLATE.map(t => ({
-          user_id: uid,
-          day: t.day || 1,
-          start_time: t.start,
-          end_time: t.end,
-          label: t.label,
-          block_type: t.block_type,
-        }));
-        const { data: inserted, error: insertError } = await supabase
-          .from('time_blocks')
-          .insert(toInsert as any)
-          .select();
-
-        if (insertError) {
-          console.warn('time_blocks insert error:', insertError.message);
-          // If conflict (already exists), re-fetch
-          const { data: retry } = await supabase.from('time_blocks').select('*').eq('user_id', uid).order('start_time');
-          dbBlocks = retry || [];
-        } else {
-          dbBlocks = inserted || [];
-        }
-      }
-
-      // Fetch check_ins to know completed status
-      const blockIds = dbBlocks.map((b: any) => b.id);
-      let checkInsMap = new Set<string>();
-      if (blockIds.length > 0) {
-        const { data: checkIns } = await supabase
-          .from('check_ins')
-          .select('time_block_id')
-          .eq('user_id', uid)
-          .in('time_block_id', blockIds);
-        if (checkIns) {
-          checkInsMap = new Set(checkIns.map((c: any) => c.time_block_id));
-        }
-      }
+      const res = await fetch('/api/time-blocks');
+      if (!res.ok) throw new Error('Could not load time blocks');
+      const payload = await res.json();
+      const dbBlocks = payload.blocks || [];
+      const checkInsMap = new Set((payload.checkIns || []).map((c: any) => c.time_block_id));
 
       const mapped: Block[] = dbBlocks.map((b: any) => ({
         id: b.id,
@@ -232,7 +186,17 @@ export default function DashboardPage() {
         completed: false,
         day: t.day
       })));
-
+    } catch (error) {
+      console.warn('time_blocks load error:', error);
+      setBlocks(DEFAULT_TEMPLATE.map((t,i) => ({
+        id: `temp-${i}`,
+        label: t.label,
+        block_type: t.block_type,
+        start: t.start,
+        end: t.end,
+        completed: false,
+        day: t.day
+      })));
     } finally {
       setLoadingBlocks(false);
     }
@@ -262,14 +226,15 @@ export default function DashboardPage() {
 
     if (newCompleted) {
       const wasFirstEver = totalCheckIns === 0;
-      const { error } = await (supabase.from('check_ins') as any).upsert({
-        user_id: userId,
-        time_block_id: realId,
-        completed_at: new Date().toISOString(),
-        missed: false,
-      }, { onConflict: 'user_id,time_block_id' });
-      if (error) {
-        console.warn('check_in upsert error:', error.message);
+      const res = await fetch('/api/check-ins', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ timeBlockId: realId, completed: true }),
+      });
+      if (!res.ok) {
+        const payload = await res.json().catch(() => ({}));
+        setBlocks(blocks);
+        toast.error(payload.error || 'Could not save check-in.');
       } else {
         setTotalCheckIns((n) => n + 1);
         // First-ever check-in: small celebratory toast (the Achievement modal
@@ -301,8 +266,15 @@ export default function DashboardPage() {
           }, 700);
         }
       } else {
-        const { error } = await supabase.from('check_ins').delete().eq('user_id', userId).eq('time_block_id', realId);
-        if (error) console.warn('check_in delete error:', error.message);
+        const res = await fetch('/api/check-ins', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ timeBlockId: realId, completed: false }),
+        });
+        if (!res.ok) {
+          setBlocks(blocks);
+          toast.error('Could not update check-in.');
+        }
       }
     } catch (err) {
       console.warn('Check-in error', err);
@@ -358,6 +330,12 @@ export default function DashboardPage() {
     return past;
   }, [blocks, now]);
 
+  const latestMissedBlock = useMemo(() => {
+    return blocks
+      .filter((b) => pastBlocks.has(b.id))
+      .sort((a, b) => toMinutes(b.end) - toMinutes(a.end))[0] || null;
+  }, [blocks, pastBlocks]);
+
   // Re-schedule block reminders whenever the block list changes (after init).
   useEffect(() => {
     if (typeof Notification === 'undefined') return;
@@ -387,7 +365,10 @@ export default function DashboardPage() {
           <div className="flex items-start justify-between gap-4 mb-2">
             <div className="min-w-0">
               <div className="flex items-center gap-2 mb-1">
-                <h1 className="text-2xl md:text-3xl font-extrabold tracking-tighter text-white">Today</h1>
+                <div>
+                  <p className="text-[10px] uppercase tracking-[0.28em] text-amber-300/70 font-extrabold mb-1">Command Center</p>
+                  <h1 className="text-2xl md:text-3xl font-extrabold tracking-tighter text-white">Lock the day.</h1>
+                </div>
                 <button
                   onClick={() => setHelpOpen(true)}
                   className="w-6 h-6 rounded-full bg-neutral-900 border border-neutral-800 flex items-center justify-center text-neutral-500 hover:text-amber-300 hover:border-amber-500/30 transition-colors"
@@ -466,23 +447,14 @@ export default function DashboardPage() {
             <NextMilestone currentStreak={streak} />
           </div>
 
-          {/* Day X of 30 strip (demo mode only) */}
+          {/* Contract strip — the 30-day commitment framing */}
           {!cohortDayInfo.hidden && !cohortDayInfo.isPreCohort && !cohortDayInfo.isPostCohort && (
-            <div className="mt-4 mb-6 rounded-xl border border-neutral-800 bg-[#121212]/50 p-4">
-              <div className="flex items-center justify-between mb-2">
-                <div className="flex items-center gap-2">
-                  <span className="text-[10px] uppercase tracking-[0.2em] text-neutral-500 font-bold">Cohort Day</span>
-                  <span className="text-base font-extrabold text-amber-200">{cohortDayInfo.dayNumber} <span className="text-neutral-600 text-xs">of {cohortDayInfo.total}</span></span>
-                </div>
-                <span className="text-[10px] text-neutral-500">{cohortDayInfo.total - cohortDayInfo.dayNumber} days remaining</span>
-              </div>
-              <div className="h-1.5 w-full bg-neutral-900 rounded-full overflow-hidden">
-                <div
-                  className="h-full bg-gradient-to-r from-amber-500 to-amber-300 rounded-full transition-all duration-500"
-                  style={{ width: `${(cohortDayInfo.dayNumber / cohortDayInfo.total) * 100}%` }}
-                />
-              </div>
-            </div>
+            <ContractStrip
+              dayNumber={cohortDayInfo.dayNumber}
+              total={cohortDayInfo.total}
+              completedCount={completedCount}
+              totalCount={totalCount}
+            />
           )}
 
           {!cohortDayInfo.hidden && cohortDayInfo.isPreCohort && (
@@ -522,65 +494,68 @@ export default function DashboardPage() {
             </div>
           )}
 
-          {/* Primary CTA: the "now" question */}
+          {/* Primary mission control: answers “what do I do right now?” */}
           {!cohortDayInfo.isPreCohort && !cohortDayInfo.isPostCohort && (
             <div className="mb-6" data-onboarding="now">
-              {allDone ? (
-                <DayCompleteCard
-                  streak={streak}
-                  bestStreak={bestStreak}
-                  completedCount={completedCount}
-                />
-              ) : currentBlock ? (
-                <PrimaryNowCard
-                  block={currentBlock}
-                  onCheckIn={() => handleCheckIn(currentBlock.id)}
-                  justChecked={justCheckedId === currentBlock.id}
-                />
-              ) : nextBlock ? (
-                <PrimaryNextCard block={nextBlock} now={now} />
-              ) : (
-                <PrimaryEmptyCard />
-              )}
+              <MissionControlCard
+                allDone={allDone}
+                currentBlock={currentBlock || null}
+                nextBlock={nextBlock || null}
+                latestMissedBlock={latestMissedBlock}
+                now={now}
+                streak={streak}
+                bestStreak={bestStreak}
+                completedCount={completedCount}
+                totalCount={totalCount}
+                teamName={myTeamName}
+                onCheckIn={(id) => handleCheckIn(id)}
+                onShare={() => setShareCardOpen(true)}
+                justCheckedId={justCheckedId}
+              />
             </div>
           )}
 
-          {/* All blocks list — hidden in pre-cohort (Day 1 preview shown via strip above) */}
+          {/* Execution timeline — the visible contract for today */}
           {!cohortDayInfo.isPreCohort && (
-            <section data-onboarding="blocks">
+            <section data-onboarding="blocks" className="mb-6">
               <div className="flex items-center justify-between mb-3">
-                <h2 className="text-[10px] font-extrabold text-neutral-500 uppercase tracking-[0.2em]">
-                  Today&apos;s blocks
-                </h2>
+                <div>
+                  <p className="text-[10px] font-extrabold text-amber-300/70 uppercase tracking-[0.25em]">Execution Timeline</p>
+                  <h2 className="text-base font-extrabold text-white tracking-tight mt-1">Six locks. One chain.</h2>
+                </div>
                 {!loadingBlocks && totalCount > 0 && (
-                  <span className="text-[10px] text-neutral-500">
-                    {completedCount} of {totalCount} done
+                  <span className="text-xs text-neutral-400 font-bold">
+                    {completedCount}/{totalCount} locked
                   </span>
                 )}
               </div>
               {loadingBlocks ? (
-                <div className="text-sm text-neutral-500 animate-pulse">Loading blocks…</div>
+                <div className="rounded-2xl border border-neutral-900 bg-[#121212]/50 p-6 text-sm text-neutral-500 animate-pulse">Loading execution timeline…</div>
               ) : blocks.length === 0 ? (
                 <div className="rounded-xl border border-dashed border-neutral-800 bg-[#121212]/30 p-6 text-center">
                   <p className="text-sm text-neutral-300 mb-1 font-semibold">No blocks set up yet</p>
-                  <p className="text-xs text-neutral-500">Your schedule will appear here once Day 1 begins.</p>
+                  <p className="text-xs text-neutral-500">Your execution timeline will appear here once Day 1 begins.</p>
                 </div>
               ) : (
-                <div className="space-y-2.5">
-                  {blocks.map((block) => (
-                    <BlockRow
-                      key={block.id}
-                      block={block}
-                      isCurrent={currentBlock?.id === block.id}
-                      isNext={nextBlock?.id === block.id}
-                      isPast={pastBlocks.has(block.id)}
-                      onCheckIn={() => handleCheckIn(block.id)}
-                      justChecked={justCheckedId === block.id}
-                    />
-                  ))}
-                </div>
+                <ExecutionTimeline
+                  blocks={blocks}
+                  currentBlockId={currentBlock?.id || null}
+                  nextBlockId={nextBlock?.id || null}
+                  pastBlocks={pastBlocks}
+                  justCheckedId={justCheckedId}
+                  onCheckIn={(id) => handleCheckIn(id)}
+                />
               )}
             </section>
+          )}
+
+          {!cohortDayInfo.isPreCohort && !cohortDayInfo.isPostCohort && (
+            <PremiumSquadPulse
+              teamName={myTeamName}
+              completedCount={completedCount}
+              totalCount={totalCount}
+              streak={streak}
+            />
           )}
 
           {/* Team pulse — only renders if user is on a team with posts */}
@@ -659,6 +634,313 @@ export default function DashboardPage() {
 // ─────────────────────────────────────────────────────────────────────────────
 // Sub-components
 // ─────────────────────────────────────────────────────────────────────────────
+
+function ContractStrip({ dayNumber, total, completedCount, totalCount }: { dayNumber: number; total: number; completedCount: number; totalCount: number }) {
+  const pct = Math.max(0, Math.min(100, Math.round((dayNumber / Math.max(total, 1)) * 100)));
+  const dailyPct = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
+
+  return (
+    <section className="mt-4 mb-6 rounded-2xl border border-amber-700/30 bg-[radial-gradient(circle_at_top_left,rgba(240,176,48,0.16),transparent_38%),linear-gradient(135deg,rgba(18,18,18,0.95),rgba(13,13,13,0.98))] p-4 md:p-5 shadow-2xl shadow-amber-500/5 overflow-hidden relative">
+      <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-amber-300/50 to-transparent" />
+      <div className="flex items-start justify-between gap-4 mb-4">
+        <div>
+          <p className="text-[10px] uppercase tracking-[0.32em] text-amber-300/70 font-extrabold">Contract</p>
+          <h2 className="text-xl md:text-2xl font-black text-amber-100 tracking-tight mt-1">
+            Day {dayNumber} <span className="text-sm text-amber-300/60 font-extrabold">/ {total}</span>
+          </h2>
+        </div>
+        <div className="text-right">
+          <p className="text-[10px] uppercase tracking-[0.22em] text-neutral-500 font-bold">Today</p>
+          <p className="text-sm font-extrabold text-white mt-1">{completedCount}/{totalCount || 0} locked</p>
+        </div>
+      </div>
+      <div className="space-y-3">
+        <div>
+          <div className="flex items-center justify-between text-[10px] text-neutral-500 font-bold uppercase tracking-wider mb-1.5">
+            <span>30-day chain</span>
+            <span>{pct}%</span>
+          </div>
+          <div className="h-2 w-full rounded-full bg-black/40 border border-neutral-900 overflow-hidden">
+            <div className="h-full rounded-full bg-gradient-to-r from-amber-600 via-amber-400 to-amber-200 shadow-[0_0_24px_rgba(240,176,48,0.35)] transition-all duration-700" style={{ width: `${pct}%` }} />
+          </div>
+        </div>
+        <div>
+          <div className="flex items-center justify-between text-[10px] text-neutral-500 font-bold uppercase tracking-wider mb-1.5">
+            <span>Today&apos;s locks</span>
+            <span>{dailyPct}%</span>
+          </div>
+          <div className="grid grid-cols-6 gap-1.5">
+            {Array.from({ length: Math.max(totalCount || 6, 1) }).map((_, i) => (
+              <div key={i} className={`h-1.5 rounded-full ${i < completedCount ? 'bg-emerald-400 shadow-[0_0_12px_rgba(52,211,153,0.35)]' : 'bg-neutral-800'}`} />
+            ))}
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function MissionControlCard({
+  allDone,
+  currentBlock,
+  nextBlock,
+  latestMissedBlock,
+  now,
+  streak,
+  bestStreak,
+  completedCount,
+  totalCount,
+  teamName,
+  onCheckIn,
+  onShare,
+  justCheckedId,
+}: {
+  allDone: boolean;
+  currentBlock: Block | null;
+  nextBlock: Block | null;
+  latestMissedBlock: Block | null;
+  now: string;
+  streak: number;
+  bestStreak: number;
+  completedCount: number;
+  totalCount: number;
+  teamName: string | null;
+  onCheckIn: (id: string) => void;
+  onShare: () => void;
+  justCheckedId: string | null;
+}) {
+  if (allDone) {
+    return (
+      <div className="relative overflow-hidden rounded-3xl border border-emerald-700/40 bg-[radial-gradient(circle_at_top_left,rgba(52,211,153,0.18),transparent_36%),linear-gradient(135deg,rgba(6,38,28,0.65),rgba(13,13,13,0.98))] p-6 md:p-8 shadow-2xl shadow-emerald-500/10">
+        <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-emerald-300/60 to-transparent" />
+        <div className="flex items-center gap-2 mb-4">
+          <div className="w-10 h-10 rounded-2xl bg-emerald-400/15 border border-emerald-400/25 flex items-center justify-center">
+            <Sparkles className="w-5 h-5 text-emerald-300" />
+          </div>
+          <span className="text-[10px] uppercase tracking-[0.3em] text-emerald-300 font-extrabold">Day Complete</span>
+        </div>
+        <h2 className="text-3xl md:text-4xl font-black tracking-tighter text-emerald-50 mb-3">Chain protected.</h2>
+        <p className="text-sm text-emerald-100/75 leading-relaxed mb-6 max-w-lg">
+          {completedCount}/{totalCount} blocks locked. {streak > 0 ? `${streak}-day chain alive.` : 'The chain starts now.'} Your squad can see the proof.
+        </p>
+        <div className="flex flex-wrap gap-2 mb-6">
+          <MiniProof label="Current chain" value={`${streak}d`} />
+          <MiniProof label="Best chain" value={`${bestStreak || streak}d`} />
+          <MiniProof label="Squad" value={teamName || 'Pending'} />
+        </div>
+        <button onClick={onShare} className="h-11 px-5 rounded-xl bg-emerald-300 text-black font-extrabold text-sm hover:bg-emerald-200 transition-colors inline-flex items-center gap-2">
+          <Share2 className="w-4 h-4" /> Share progress
+        </button>
+      </div>
+    );
+  }
+
+  if (currentBlock) {
+    const elapsed = Math.max(0, toMinutes(now) - toMinutes(currentBlock.start));
+    return (
+      <div className="relative overflow-hidden rounded-3xl border border-amber-500/45 bg-[radial-gradient(circle_at_20%_0%,rgba(240,176,48,0.22),transparent_34%),linear-gradient(135deg,rgba(42,31,14,0.72),rgba(13,13,13,0.98))] p-6 md:p-8 shadow-2xl shadow-amber-500/10">
+        <div className="absolute -right-16 -top-16 w-40 h-40 rounded-full border border-amber-300/10 animate-pulse" />
+        <div className="flex items-center gap-2 mb-4">
+          <span className="inline-flex items-center gap-2 rounded-full bg-amber-300 text-black px-3 py-1 text-[10px] font-black uppercase tracking-[0.22em]">
+            <Radio className="w-3 h-3" /> Live now
+          </span>
+          <span className="text-[10px] uppercase tracking-[0.2em] text-amber-200/60 font-bold">{currentBlock.start} — {currentBlock.end}</span>
+        </div>
+        <h2 className="text-3xl md:text-5xl font-black tracking-tighter text-amber-50 mb-3 leading-[0.95]">{currentBlock.label}</h2>
+        <p className="text-sm text-amber-100/70 leading-relaxed mb-6 max-w-lg">
+          {elapsed} minutes in. {teamName ? `${teamName} sees this lock.` : 'Your squad will see this lock.'} Protect the chain with one tap.
+        </p>
+        <button onClick={() => onCheckIn(currentBlock.id)} className="h-12 px-6 rounded-xl bg-amber-300 text-black font-black text-sm hover:bg-amber-200 active:scale-[0.98] transition-all inline-flex items-center gap-2 shadow-lg shadow-amber-500/15">
+          {justCheckedId === currentBlock.id ? <CheckCircle2 className="w-4 h-4" /> : <LockKeyhole className="w-4 h-4" />}
+          {justCheckedId === currentBlock.id ? 'Locked' : 'Lock this block'}
+        </button>
+      </div>
+    );
+  }
+
+  if (latestMissedBlock) {
+    return (
+      <div className="rounded-3xl border border-red-900/45 bg-[radial-gradient(circle_at_top_left,rgba(224,90,90,0.14),transparent_34%),linear-gradient(135deg,rgba(42,20,20,0.62),rgba(13,13,13,0.98))] p-6 md:p-8 shadow-2xl shadow-red-500/5">
+        <div className="flex items-center gap-2 mb-4">
+          <span className="inline-flex items-center gap-2 rounded-full bg-red-500/15 border border-red-500/30 text-red-200 px-3 py-1 text-[10px] font-black uppercase tracking-[0.22em]">
+            <XCircle className="w-3 h-3" /> Block missed
+          </span>
+          <span className="text-[10px] uppercase tracking-[0.2em] text-red-200/50 font-bold">Closed at {latestMissedBlock.end}</span>
+        </div>
+        <h2 className="text-3xl md:text-4xl font-black tracking-tighter text-red-100 mb-3">{latestMissedBlock.label}</h2>
+        <p className="text-sm text-red-100/70 leading-relaxed mb-6 max-w-lg">
+          The window closed. No shame spiral — recover on the next block and keep the day moving.
+        </p>
+        {nextBlock && (
+          <div className="rounded-2xl border border-neutral-800 bg-black/25 p-4 flex items-center justify-between gap-3">
+            <div>
+              <p className="text-[10px] uppercase tracking-[0.2em] text-neutral-500 font-bold">Recover next</p>
+              <p className="text-sm font-extrabold text-white mt-1">{nextBlock.label}</p>
+            </div>
+            <span className="text-xs font-mono text-amber-300">{nextBlock.start}</span>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  if (nextBlock) {
+    const minutesUntil = Math.max(0, toMinutes(nextBlock.start) - toMinutes(now));
+    const hours = Math.floor(minutesUntil / 60);
+    const mins = minutesUntil % 60;
+    const countdown = hours > 0 ? `${hours}h ${mins}m` : `${mins}m`;
+    return (
+      <div className="rounded-3xl border border-neutral-800 bg-[radial-gradient(circle_at_top_left,rgba(91,168,224,0.10),transparent_34%),linear-gradient(135deg,rgba(18,18,18,0.94),rgba(13,13,13,0.98))] p-6 md:p-8 shadow-2xl shadow-black/30">
+        <div className="flex items-center gap-2 mb-4">
+          <span className="inline-flex items-center gap-2 rounded-full bg-sky-400/10 border border-sky-400/25 text-sky-200 px-3 py-1 text-[10px] font-black uppercase tracking-[0.22em]">
+            <TimerReset className="w-3 h-3" /> Next mission
+          </span>
+          <span className="text-[10px] uppercase tracking-[0.2em] text-neutral-500 font-bold">Starts in {countdown}</span>
+        </div>
+        <h2 className="text-3xl md:text-4xl font-black tracking-tighter text-white mb-3">{nextBlock.label}</h2>
+        <p className="text-sm text-neutral-400 leading-relaxed max-w-lg">
+          Window opens at {nextBlock.start}. Get ready before the chain asks for proof.
+        </p>
+      </div>
+    );
+  }
+
+  return <PrimaryEmptyCard />;
+}
+
+function MiniProof({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-xl border border-white/10 bg-black/20 px-3 py-2">
+      <p className="text-[9px] uppercase tracking-[0.2em] text-white/40 font-bold">{label}</p>
+      <p className="text-sm font-black text-white mt-0.5">{value}</p>
+    </div>
+  );
+}
+
+function ExecutionTimeline({ blocks, currentBlockId, nextBlockId, pastBlocks, justCheckedId, onCheckIn }: {
+  blocks: Block[];
+  currentBlockId: string | null;
+  nextBlockId: string | null;
+  pastBlocks: Set<string>;
+  justCheckedId: string | null;
+  onCheckIn: (id: string) => void;
+}) {
+  return (
+    <div className="rounded-2xl border border-neutral-800 bg-[#121212]/55 p-3 md:p-4 shadow-xl shadow-black/20">
+      <div className="relative">
+        <div className="absolute left-[18px] top-7 bottom-7 w-px bg-gradient-to-b from-amber-500/40 via-neutral-700 to-neutral-900" />
+        <div className="space-y-2">
+          {blocks.map((block) => {
+            const isCurrent = currentBlockId === block.id;
+            const isNext = nextBlockId === block.id;
+            const isMissed = pastBlocks.has(block.id) && !block.completed;
+            const isInteractive = block.completed || isCurrent || isMissed;
+            return (
+              <TimelineRow
+                key={block.id}
+                block={block}
+                isCurrent={isCurrent}
+                isNext={isNext}
+                isMissed={isMissed}
+                disabled={!isInteractive}
+                justChecked={justCheckedId === block.id}
+                onClick={() => isInteractive && onCheckIn(block.id)}
+              />
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function TimelineRow({ block, isCurrent, isNext, isMissed, disabled, justChecked, onClick }: {
+  block: Block;
+  isCurrent: boolean;
+  isNext: boolean;
+  isMissed: boolean;
+  disabled: boolean;
+  justChecked: boolean;
+  onClick: () => void;
+}) {
+  const status = block.completed ? 'Locked' : isMissed ? 'Missed' : isCurrent ? 'Live' : isNext ? 'Next' : 'Pending';
+  const typeColor: Record<BlockType, string> = {
+    work: 'text-amber-300',
+    break: 'text-sky-300',
+    movement: 'text-emerald-300',
+    reflection: 'text-violet-300',
+  };
+  const dotClass = block.completed
+    ? 'bg-emerald-400 text-black shadow-[0_0_18px_rgba(52,211,153,0.35)]'
+    : isMissed
+    ? 'bg-red-500/20 text-red-300 border-red-500/40'
+    : isCurrent
+    ? 'bg-amber-300 text-black shadow-[0_0_22px_rgba(240,176,48,0.45)] animate-pulse'
+    : isNext
+    ? 'bg-sky-400/15 text-sky-200 border-sky-400/30'
+    : 'bg-neutral-900 text-neutral-600 border-neutral-800';
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className={`relative w-full rounded-xl border px-3 py-3 md:px-4 md:py-3.5 text-left transition-all ${
+        block.completed
+          ? 'border-emerald-800/30 bg-emerald-950/10'
+          : isMissed
+          ? 'border-red-900/35 bg-red-950/10'
+          : isCurrent
+          ? 'border-amber-500/45 bg-amber-950/15 shadow-lg shadow-amber-500/5'
+          : isNext
+          ? 'border-sky-900/35 bg-sky-950/10'
+          : 'border-neutral-900 bg-black/10'
+      } ${disabled ? 'cursor-default' : 'hover:border-amber-500/30 active:scale-[0.995]'}`}
+    >
+      <div className="flex items-center gap-3">
+        <div className={`relative z-10 w-9 h-9 rounded-xl border flex items-center justify-center shrink-0 ${dotClass}`}>
+          {block.completed ? <CheckCircle2 className="w-4 h-4" /> : isMissed ? <XCircle className="w-4 h-4" /> : isCurrent ? <Radio className="w-4 h-4" /> : <Circle className="w-4 h-4" />}
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2 mb-0.5">
+            <span className={`text-[10px] font-black uppercase tracking-[0.16em] ${typeColor[block.block_type]}`}>{block.block_type}</span>
+            <span className={`text-[9px] font-black uppercase tracking-[0.16em] ${block.completed ? 'text-emerald-300' : isMissed ? 'text-red-300' : isCurrent ? 'text-amber-300' : isNext ? 'text-sky-300' : 'text-neutral-600'}`}>{status}</span>
+          </div>
+          <h3 className={`text-sm font-extrabold truncate ${block.completed ? 'text-emerald-50' : isMissed ? 'text-red-100' : 'text-white'}`}>
+            {block.label}
+            {justChecked && <span className="ml-2 text-emerald-300 text-xs">✓ Saved</span>}
+          </h3>
+        </div>
+        <div className="text-right shrink-0">
+          <p className="text-[11px] font-mono text-neutral-500">{block.start}</p>
+          <p className="text-[10px] font-mono text-neutral-700">{block.end}</p>
+        </div>
+      </div>
+    </button>
+  );
+}
+
+function PremiumSquadPulse({ teamName, completedCount, totalCount, streak }: { teamName: string | null; completedCount: number; totalCount: number; streak: number }) {
+  return (
+    <section className="mb-6 rounded-2xl border border-neutral-800 bg-[linear-gradient(135deg,rgba(18,18,18,0.85),rgba(13,13,13,0.96))] p-5">
+      <div className="flex items-start gap-3">
+        <div className="w-10 h-10 rounded-2xl bg-amber-400/10 border border-amber-400/20 flex items-center justify-center shrink-0">
+          <Users className="w-4 h-4 text-amber-300" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-[10px] uppercase tracking-[0.28em] text-neutral-500 font-extrabold">Squad Pulse</p>
+          <h3 className="text-base font-black text-white mt-1">{teamName ? `${teamName} is watching.` : 'Your squad room is forming.'}</h3>
+          <p className="text-xs text-neutral-400 leading-relaxed mt-1">
+            {teamName
+              ? `${completedCount}/${totalCount || 0} blocks locked today. ${streak > 0 ? `${streak}-day chain visible to the squad.` : 'The chain begins with your next lock.'}`
+              : 'Once assigned, your squad will see proof of work, daily locks, and chain progress.'}
+          </p>
+        </div>
+        <Target className="w-4 h-4 text-neutral-700 shrink-0" />
+      </div>
+    </section>
+  );
+}
 
 function PrimaryNowCard({ block, onCheckIn, justChecked }: { block: Block; onCheckIn: () => void; justChecked: boolean }) {
   return (

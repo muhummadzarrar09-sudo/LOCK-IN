@@ -98,7 +98,7 @@ export default function SignupPage() {
       // Session exists — create profile
       if (data.user && data.session) {
         await supabase.from('profiles').upsert(
-          { id: data.user.id, username: values.username, email: values.email, role: 'member' } as any,
+          { id: data.user.id, username: values.username, email: values.email, timezone } as any,
           { onConflict: 'id' }
         );
       }

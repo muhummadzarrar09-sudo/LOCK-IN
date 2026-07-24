@@ -55,15 +55,15 @@ export default function Navbar() {
   };
 
   const navItems = [
-    { label: 'Schedule', href: '/dashboard', icon: Shield },
-    { label: 'Leaderboard', href: '/leaderboard', icon: Trophy },
-    { label: 'Team', href: '/team', icon: Users },
-    { label: 'Reports', href: '/reports', icon: FileText },
-    { label: 'Community', href: '/community', icon: MessageCircle },
+    { label: 'Command', href: '/dashboard', icon: Shield },
+    { label: 'Board', href: '/leaderboard', icon: Trophy },
+    { label: 'Squad', href: '/team', icon: Users },
+    { label: 'Field Notes', href: '/reports', icon: FileText },
+    { label: 'Broadcasts', href: '/community', icon: MessageCircle },
     { label: 'Members', href: '/people', icon: Users },
     { label: 'Help', href: '/help', icon: LifeBuoy },
-    { label: 'Settings', href: '/settings', icon: Sliders },
-    ...(role === 'admin' ? [{ label: 'Admin', href: '/admin', icon: Settings }] : []),
+    { label: 'Control', href: '/settings', icon: Sliders },
+    ...(role === 'admin' ? [{ label: 'Operator', href: '/admin', icon: Settings }] : []),
   ];
 
   const isActive = (href: string) => {

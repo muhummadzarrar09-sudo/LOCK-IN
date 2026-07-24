@@ -68,7 +68,7 @@ export default function TermsPage() {
           </Section>
 
           <Section title="Contact">
-            <p>Questions? Email <a href="mailto:support@accountability.com" className="text-amber-300 hover:text-amber-200 underline">support@accountability.com</a>.</p>
+            <p>Questions? Email <a href="mailto:support@lockin.app" className="text-amber-300 hover:text-amber-200 underline">support@lockin.app</a>.</p>
           </Section>
         </div>
       </div>
