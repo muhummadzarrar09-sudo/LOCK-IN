@@ -359,12 +359,73 @@ CREATE POLICY "Cohorts: authenticated read"
   USING (auth.role() = 'authenticated');
 
 -- ------------------------------------------------------------
--- Leaderboard: authenticated only. The view may still intentionally expose
--- narrow public ranking data to authenticated members while bypassing table
--- RLS for streak aggregation.
+-- Table/view grants: RLS is not enough if roles retain broad object grants.
+-- Keep browser roles on least privilege and reserve mutations for explicit
+-- policies/server APIs. In particular, remove TRUNCATE/TRIGGER/REFERENCES,
+-- which are not useful to app clients and can be dangerous.
 -- ------------------------------------------------------------
-REVOKE SELECT ON leaderboard FROM anon;
+REVOKE ALL PRIVILEGES ON ALL TABLES IN SCHEMA public FROM anon;
+REVOKE TRUNCATE, REFERENCES, TRIGGER ON ALL TABLES IN SCHEMA public FROM authenticated;
+
+-- Remove direct browser mutations from all server-owned tables.
+REVOKE INSERT, UPDATE, DELETE ON
+  achievements,
+  audit_logs,
+  bug_reports,
+  check_ins,
+  cohorts,
+  community_posts,
+  device_sessions,
+  profile_views,
+  rate_limit_buckets,
+  reminders,
+  reports,
+  streak_freezes,
+  streaks,
+  team_members,
+  team_startup_log,
+  teams,
+  time_blocks
+FROM authenticated;
+
+-- Profiles still need authenticated INSERT/UPDATE for signup/onboarding/settings,
+-- but direct DELETE is disabled; account deletion must go through the server API.
+REVOKE DELETE ON profiles FROM authenticated;
+GRANT SELECT, INSERT, UPDATE ON profiles TO authenticated;
+
+-- Explicit read grants for authenticated browser clients. RLS still decides
+-- which rows can be read.
+GRANT SELECT ON
+  achievements,
+  bug_reports,
+  check_ins,
+  cohorts,
+  community_posts,
+  device_sessions,
+  profile_views,
+  reminders,
+  reports,
+  streak_freezes,
+  streaks,
+  team_members,
+  team_startup_log,
+  teams,
+  time_blocks
+TO authenticated;
+
+-- Views: revoke all accidental broad privileges, then grant SELECT only.
+REVOKE ALL PRIVILEGES ON public_profiles FROM anon, authenticated;
+GRANT SELECT ON public_profiles TO authenticated;
+
+REVOKE ALL PRIVILEGES ON leaderboard FROM anon, authenticated;
 GRANT SELECT ON leaderboard TO authenticated;
+
+REVOKE ALL PRIVILEGES ON cohort_daily_active FROM anon, authenticated;
+GRANT SELECT ON cohort_daily_active TO authenticated;
+
+-- Future objects should not automatically become browser-writable.
+ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE ALL ON TABLES FROM anon;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE TRUNCATE, REFERENCES, TRIGGER ON TABLES FROM authenticated;
 
 -- ------------------------------------------------------------
 -- Verification helper
