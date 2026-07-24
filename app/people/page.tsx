@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
-import { Search, Users, Flame, Trophy, Award, Clock, ChevronDown, Activity } from 'lucide-react';
+import { Search, Users, Flame, Trophy, Award, Clock, ChevronDown } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import Navbar from '@/components/Navbar';
 import PageHeader from '@/components/PageHeader';
@@ -256,7 +256,7 @@ export default function PeoplePage() {
                           {m.username}
                         </p>
                         <p className="text-[10px] text-neutral-500 uppercase tracking-wider font-bold">
-                          {sort === 'rank' ? `#${m.rank}` : sort === 'recent' ? 'Recent' : sort === 'achievements' ? `${m.achievements_count}★` : `Best ${m.best_streak}d`}
+                          {sort === 'rank' ? `#${m.rank || '—'}` : sort === 'recent' ? 'Recent' : sort === 'achievements' ? `${m.achievements_count || 0} badge${(m.achievements_count || 0) === 1 ? '' : 's'}` : `Best ${m.best_streak}d`}
                         </p>
                       </div>
                     </div>

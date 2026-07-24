@@ -345,11 +345,10 @@ function NotOnTeamState({ otherCount }: { otherCount: number }) {
       </div>
       {otherCount > 0 && (
         <div>
-          <h3 className="text-[10px] font-extrabold text-neutral-500 uppercase tracking-[0.2em] mb-3">Teams in the cohort</h3>
-          <div className="grid sm:grid-cols-2 gap-3">
-            {/* This branch reuses OtherTeams rendering — kept minimal for now */}
-            <p className="text-xs text-neutral-500">Teams are forming. Check back after Day 1.</p>
-          </div>
+          <h3 className="text-[10px] font-extrabold text-neutral-500 uppercase tracking-[0.2em] mb-3">Teams forming in your cohort</h3>
+          <p className="text-xs text-neutral-500">
+            {otherCount} {otherCount === 1 ? 'squad is' : 'squads are'} being assembled. You&apos;ll see the full roster here once your team is set.
+          </p>
         </div>
       )}
     </>

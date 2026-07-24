@@ -34,7 +34,7 @@ const SECTIONS: Section[] = [
       { icon: Sparkles, title: 'Weekly recap modal', body: 'Once a week, the dashboard surfaces your last 7 days: check-ins, best day, badges earned. Throttled via localStorage.', tag: 'new' },
       { icon: TrendingUp, title: 'You vs. the cohort card', body: 'Your rank + rank-delta since last visit + percentile + vs. median + vs. average. Stored locally so it tracks over time.', tag: 'new' },
       { icon: BarChart3, title: 'Admin analytics', body: 'Retention curve, peak check-in hour heatmap, top contributors, members-to-nudge list, cohort health score, CSV export.', tag: 'new' },
-      { icon: Zap, title: 'Next-milestone widget', body: 'A gradient progress bar on the dashboard showing the next badge you\u2019re chasing and how many days to go.', tag: 'new' },
+      { icon: Zap, title: 'Next-milestone widget', body: 'A gradient progress bar on the dashboard showing the next badge you’re chasing and how many days to go.', tag: 'new' },
       { icon: History, title: 'Replay welcome tour', body: 'Settings has a "Replay welcome" button. Clears onboarding hints + redirects to /welcome. Useful for admins and returning users.', tag: 'new' },
       { icon: Calendar, title: 'Power hour + best day insights', body: 'Two small pills on the dashboard: when you usually check in (hour-of-day) and which day of the week is your strongest.', tag: 'new' },
     ],
@@ -44,9 +44,9 @@ const SECTIONS: Section[] = [
     date: 'Earlier',
     summary: 'The original launch. Time blocks, check-ins, streaks, teams, reports, community, leaderboard, profile, settings, admin. The full 30-day execution contract.',
     entries: [
-      { icon: Sparkles, title: 'Welcome wizard', body: '4 steps: welcome, profile, timezone, Day 1 preview. Sets up the user\u2019s defaults and shows what they signed up for.', tag: 'new' },
+      { icon: Sparkles, title: 'Welcome wizard', body: '4 steps: welcome, profile, timezone, Day 1 preview. Sets up the user’s defaults and shows what they signed up for.', tag: 'new' },
       { icon: BarChart3, title: 'Real-time dashboards', body: 'Dashboard, leaderboard, team feed, reports, community, members, history, settings, admin. All Supabase real-time where it matters.', tag: 'new' },
-      { icon: Award, title: 'Streak freezes', body: 'Earned automatically at 7/14/21/30 day streaks. Auto-applied to your next missed day so a single miss doesn\u2019t break the chain.', tag: 'new' },
+      { icon: Award, title: 'Streak freezes', body: 'Earned automatically at 7/14/21/30 day streaks. Auto-applied to your next missed day so a single miss doesn’t break the chain.', tag: 'new' },
       { icon: Users, title: 'Teams + team feed', body: '3-4 members per squad. Shared startup log. Admin assigns teams. RLS protects team data.', tag: 'new' },
       { icon: Bell, title: 'Browser push notifications', body: 'Notifications API for time-block reminders. Permission requested via the bell. No email, no separate app.', tag: 'new' },
     ],
@@ -67,7 +67,7 @@ export default function WhatsNewPage() {
             <ArrowLeft className="w-3 h-3" /> Back
           </button>
           <div className="mb-8">
-            <p className="text-[10px] uppercase tracking-[0.3em] text-amber-300/80 font-bold mb-2">What\u2019s new</p>
+            <p className="text-[10px] uppercase tracking-[0.3em] text-amber-300/80 font-bold mb-2">What’s new</p>
             <h1 className="font-serif text-3xl md:text-4xl tracking-tighter text-white mb-3">
               We ship fast.
             </h1>
@@ -117,12 +117,12 @@ export default function WhatsNewPage() {
           </div>
 
           <div className="mt-12 rounded-2xl border border-amber-700/30 bg-gradient-to-br from-amber-950/20 to-transparent p-6 text-center">
-            <p className="text-[10px] uppercase tracking-[0.3em] text-amber-300/80 font-bold mb-2">What\u2019s next</p>
+            <p className="text-[10px] uppercase tracking-[0.3em] text-amber-300/80 font-bold mb-2">What’s next</p>
             <h2 className="font-serif text-2xl tracking-tighter text-white mb-2">
               The finished product.
             </h2>
             <p className="text-sm text-neutral-400 leading-relaxed max-w-md mx-auto">
-              This is the MVP. The full product will have: native push, multi-cohort support, comments + reactions on team feeds, follow + cheer, light theme, and proper onboarding for new cohort leads. We\u2019re shipping those next.
+              This is the MVP. The full product will have: native push, multi-cohort support, comments + reactions on team feeds, follow + cheer, light theme, and proper onboarding for new cohort leads. We’re shipping those next.
             </p>
           </div>
         </div>

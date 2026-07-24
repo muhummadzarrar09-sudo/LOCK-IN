@@ -18,7 +18,7 @@ const DEMO_NAMES = [
 ];
 
 const DEMO_TEAMS = [
-  { name: 'Foundry', title: 'AI for solo lawyers', pitch: 'Contract review that doesn\u2019t need a human reviewer for the first pass.', stage: 'prototype' },
+  { name: 'Foundry', title: 'AI for solo lawyers', pitch: 'Contract review that doesn’t need a human reviewer for the first pass.', stage: 'prototype' },
   { name: 'Atlas', title: 'Climate-risk dashboards for SMBs', pitch: 'What the IPCC reports say about your zip code, in plain English.', stage: 'idea' },
   { name: 'Lumen', title: 'Reading coach for 2nd graders', pitch: 'Personalized reading-level stories that adjust in real time.', stage: 'prototype' },
   { name: 'Hexa', title: 'Group-buying for indie pharmacies', pitch: 'Pool buying power so a corner pharmacy can compete with CVS.', stage: 'idea' },

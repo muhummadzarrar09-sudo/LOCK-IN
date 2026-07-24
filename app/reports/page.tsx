@@ -1,5 +1,5 @@
 "use client";
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { FileText, WifiOff, Clock, X, Search } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import Navbar from '@/components/Navbar';
@@ -37,25 +37,41 @@ export default function ReportsPage() {
   const [query, setQuery] = useState('');
 
   const fetcher = useCallback(async (page: number, pageSize: number) => {
-    const from = page * pageSize;
-    const to = from + pageSize - 1;
-    const { data, error } = await supabase
-      .from('reports')
-      .select('*')
-      .order('created_at', { ascending: false })
-      .range(from, to);
-    if (error) throw error;
-    return { rows: (data || []) as Report[], hasMore: (data || []).length === pageSize };
-  }, []);
+    const useWideRange = query.trim().length > 0;
+    let data: any[] = [];
+    if (useWideRange) {
+      // Search by title/body across the whole table, then paginate the matches.
+      const q = query.trim();
+      const { data: byTitle, error: e1 } = await supabase
+        .from('reports')
+        .select('*')
+        .or(`title.ilike.%${q}%,body.ilike.%${q}%`)
+        .order('created_at', { ascending: false })
+        .range(page * pageSize, page * pageSize + pageSize - 1);
+      if (e1) throw e1;
+      data = byTitle || [];
+    } else {
+      const from = page * pageSize;
+      const to = from + pageSize - 1;
+      const { data: byDate, error: e2 } = await supabase
+        .from('reports')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .range(from, to);
+      if (e2) throw e2;
+      data = byDate || [];
+    }
+    return { rows: data as Report[], hasMore: data.length === pageSize };
+  }, [query]);
 
-  const { rows, loading, loadingMore, hasMore, loadMore, error } = usePagination<Report>({ fetcher, pageSize: PAGE_SIZE });
+  const { rows, loading, loadingMore, hasMore, loadMore, error, refresh } = usePagination<Report>({ fetcher, pageSize: PAGE_SIZE });
 
-  // Client-side filter
-  const filtered = useMemo(() => {
-    if (!query.trim()) return rows;
-    const q = query.toLowerCase();
-    return rows.filter((r) => r.title.toLowerCase().includes(q) || r.body.toLowerCase().includes(q));
-  }, [rows, query]);
+  // Reset pagination when search query changes
+  useEffect(() => {
+    refresh();
+  }, [query, refresh]);
+
+  const filtered = rows;
 
   return (
     <>

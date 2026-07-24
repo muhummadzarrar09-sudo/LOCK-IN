@@ -23,7 +23,7 @@ export default function HomePage() {
           </div>
           <div className="flex items-center gap-2 md:gap-3">
             <Link href="/whats-new" className="hidden md:inline-flex h-9 px-3 items-center text-[11px] font-bold uppercase tracking-wider text-amber-300/80 hover:text-amber-200 transition-colors">
-              What\u2019s new
+              What’s new
             </Link>
             <Link href="/auth/login" className="h-9 px-3 md:px-4 inline-flex items-center text-[11px] font-bold uppercase tracking-wider text-neutral-400 hover:text-white transition-colors">
               Sign in
@@ -159,7 +159,7 @@ export default function HomePage() {
         <span className="font-semibold tracking-wider">DISCIPLINE COHORT</span>
         <div className="flex items-center gap-4 flex-wrap justify-center">
           <span>Members only · No ads · Built for builders</span>
-          <Link href="/whats-new" className="hover:text-amber-300 transition-colors font-semibold">What\u2019s new</Link>
+          <Link href="/whats-new" className="hover:text-amber-300 transition-colors font-semibold">What’s new</Link>
           <Link href="/privacy" className="hover:text-amber-300 transition-colors">Privacy</Link>
           <Link href="/terms" className="hover:text-amber-300 transition-colors">Terms</Link>
         </div>

@@ -456,10 +456,10 @@ export default function DashboardPage() {
                 <div className="flex-1 min-w-0">
                   <p className="text-[10px] uppercase tracking-[0.3em] text-amber-300/80 font-bold">Welcome to the cohort</p>
                   <h2 className="text-lg md:text-xl font-extrabold text-amber-100 mt-1 leading-tight">
-                    You\u2019re in. Here\u2019s the deal.
+                    You&rsquo;re in. Here&rsquo;s the deal.
                   </h2>
                   <p className="text-xs text-amber-200/80 leading-relaxed mt-2">
-                    Six time blocks per day. Check in when you finish one. Your team sees everything. The streak compounds. That\u2019s it.
+                    Six time blocks per day. Check in when you finish one. Your team sees everything. The streak compounds. That&rsquo;s it.
                   </p>
                 </div>
               </div>

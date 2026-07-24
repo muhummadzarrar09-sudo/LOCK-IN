@@ -694,7 +694,7 @@ function CohortProgressCard({ dayNumber, total, pct, phase, activeRate, healthSc
           <p className="text-sm font-extrabold capitalize leading-tight">{healthLabel} · {healthScore}/100</p>
         </div>
         <p className="text-[10px] opacity-70 leading-tight text-right max-w-[120px]">
-          {healthLabel === 'thriving' ? 'Momentum is real. Keep doing what you\u2019re doing.' :
+          {healthLabel === 'thriving' ? 'Momentum is real. Keep doing what you’re doing.' :
            healthLabel === 'steady' ? 'Cohort is holding. Look at the nudge list.' :
            'Activity dipping. Time to reach out.'}
         </p>

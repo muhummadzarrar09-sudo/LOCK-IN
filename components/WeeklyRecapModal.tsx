@@ -223,7 +223,7 @@ export function WeeklyRecapModal() {
             ? 'Some momentum, room to grow. The streak is what compounds.'
             : stats.totalCheckIns < 30
             ? 'A solid week. The contract is forming.'
-            : 'You\u2019re operating at the level this cohort was built for.'}
+            : 'You’re operating at the level this cohort was built for.'}
         </p>
 
         <div className="flex items-center gap-2">

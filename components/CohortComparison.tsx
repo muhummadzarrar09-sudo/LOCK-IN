@@ -166,7 +166,7 @@ export function CohortComparison({ userId, currentStreak, currentBest }: Props) 
         </div>
         <p className="text-[10px] text-neutral-500 mt-2">
           {data.percentile >= 90
-            ? 'Top 10%. You\u2019re in rare air.'
+            ? 'Top 10%. You’re in rare air.'
             : data.percentile >= 50
             ? 'Above the median. The habit is holding.'
             : data.percentile >= 25
