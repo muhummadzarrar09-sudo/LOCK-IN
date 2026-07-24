@@ -6,6 +6,8 @@ import { TrendingUp, Users, Activity, Download, RefreshCw } from 'lucide-react';
 import { Skeleton } from '@/components/Skeleton';
 
 type DailyActive = { day: string; active_members: number; total_checkins: number };
+type TopMember = { id: string; username: string; check_ins: number; current_streak: number; best_streak: number };
+type TopPoster = { id: string; username: string; posts: number };
 type CohortMetrics = {
   total_members: number;
   active_today: number;
@@ -20,6 +22,9 @@ type CohortMetrics = {
   total_achievements: number;
   total_streak_freezes: number;
   retention_by_day: { day: number; pct_active: number; pct_completed_full: number }[];
+  top_members: TopMember[];
+  top_posters: TopPoster[];
+  needs_nudge: TopMember[]; // members with 0 check-ins in the last 3 days
 };
 
 export function AnalyticsTab() {
@@ -43,6 +48,8 @@ export function AnalyticsTab() {
         { count: totalAchievements },
         { count: totalFreezes },
         { data: dailyActiveData },
+        { data: allUsernames },
+        { data: allTeamLog },
       ] = await Promise.all([
         supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('role', 'member'),
         supabase.from('streaks').select('current_streak, best_streak'),
@@ -54,6 +61,8 @@ export function AnalyticsTab() {
         supabase.from('achievements').select('*', { count: 'exact', head: true }),
         supabase.from('streak_freezes').select('*', { count: 'exact', head: true }),
         supabase.from('cohort_daily_active').select('*').limit(30),
+        supabase.from('profiles').select('id, username').eq('role', 'member'),
+        supabase.from('team_startup_log').select('user_id'),
       ]);
 
       // Compute stats
@@ -107,6 +116,52 @@ export function AnalyticsTab() {
         });
       }
 
+      // Top members by check-in count
+      const checkInCounts = new Map<string, number>();
+      checkIns.forEach((c) => checkInCounts.set(c.user_id, (checkInCounts.get(c.user_id) || 0) + 1));
+      const streakMap = new Map<string, { current: number; best: number }>();
+      streaks.forEach((s) => streakMap.set(s.user_id, { current: s.current_streak || 0, best: s.best_streak || 0 }));
+      const usernameMap = new Map<string, string>();
+      (allUsernames || []).forEach((p: any) => usernameMap.set(p.id, p.username));
+      const topMembers: TopMember[] = Array.from(checkInCounts.entries())
+        .map(([id, count]) => ({
+          id,
+          username: usernameMap.get(id) || 'unknown',
+          check_ins: count,
+          current_streak: streakMap.get(id)?.current || 0,
+          best_streak: streakMap.get(id)?.best || 0,
+        }))
+        .sort((a, b) => b.check_ins - a.check_ins)
+        .slice(0, 5);
+
+      // Top team-feed posters
+      const postCounts = new Map<string, number>();
+      (allTeamLog || []).forEach((l: any) => postCounts.set(l.user_id, (postCounts.get(l.user_id) || 0) + 1));
+      const topPosters: TopPoster[] = Array.from(postCounts.entries())
+        .map(([id, posts]) => ({ id, username: usernameMap.get(id) || 'unknown', posts }))
+        .sort((a, b) => b.posts - a.posts)
+        .slice(0, 5);
+
+      // Members who might need a nudge: 0 check-ins in the last 3 days
+      const threeDaysAgo = new Date();
+      threeDaysAgo.setDate(threeDaysAgo.getDate() - 3);
+      const threeDaysAgoISO = threeDaysAgo.toISOString();
+      const recentActive = new Set(
+        checkIns.filter((c) => c.completed_at >= threeDaysAgoISO).map((c) => c.user_id)
+      );
+      const allMemberIds = Array.from(usernameMap.keys());
+      const needsNudge: TopMember[] = allMemberIds
+        .filter((id) => !recentActive.has(id))
+        .map((id) => ({
+          id,
+          username: usernameMap.get(id) || 'unknown',
+          check_ins: checkInCounts.get(id) || 0,
+          current_streak: streakMap.get(id)?.current || 0,
+          best_streak: streakMap.get(id)?.best || 0,
+        }))
+        .sort((a, b) => a.current_streak - b.current_streak) // weakest streaks first
+        .slice(0, 5);
+
       setMetrics({
         total_members: totalMembers || 0,
         active_today: todayUsers.size,
@@ -121,6 +176,9 @@ export function AnalyticsTab() {
         total_achievements: totalAchievements || 0,
         total_streak_freezes: totalFreezes || 0,
         retention_by_day: retention,
+        top_members: topMembers,
+        top_posters: topPosters,
+        needs_nudge: needsNudge,
       });
       setDailyActive((dailyActiveData || []) as DailyActive[]);
     } catch (e) {
@@ -231,7 +289,106 @@ export function AnalyticsTab() {
           </div>
         </section>
       )}
+
+      {/* Top contributors + members to nudge */}
+      <div className="grid md:grid-cols-2 gap-3">
+        <TopList
+          title="Top contributors"
+          subtitle="Most check-ins"
+          emptyText="No check-ins yet."
+          entries={metrics.top_members.map((m, i) => ({
+            id: m.id,
+            label: m.username,
+            href: `/u/${m.username}`,
+            primary: `${m.check_ins} check-ins`,
+            secondary: `${m.current_streak}d streak · best ${m.best_streak}d`,
+            rank: i + 1,
+          }))}
+        />
+        <TopList
+          title="Most active team posters"
+          subtitle="Team feed activity"
+          emptyText="No team posts yet."
+          entries={metrics.top_posters.map((p, i) => ({
+            id: p.id,
+            label: p.username,
+            href: `/u/${p.username}`,
+            primary: `${p.posts} ${p.posts === 1 ? 'post' : 'posts'}`,
+            secondary: null,
+            rank: i + 1,
+          }))}
+        />
+      </div>
+
+      {metrics.needs_nudge.length > 0 && (
+        <section className="rounded-2xl border border-amber-700/30 bg-amber-950/10 p-6">
+          <div className="flex items-center gap-2 mb-1">
+            <span className="text-base">{"\u26A0\uFE0F"}</span>
+            <h3 className="text-xs font-extrabold text-amber-300 uppercase tracking-[0.2em]">Needs a nudge</h3>
+          </div>
+          <p className="text-[10px] text-amber-200/60 mb-4 leading-relaxed">
+            No check-ins in the last 3 days. Reach out before the streak breaks.
+          </p>
+          <div className="space-y-1.5">
+            {metrics.needs_nudge.map((m) => (
+              <a
+                key={m.id}
+                href={`/u/${m.username}`}
+                className="flex items-center justify-between rounded-lg bg-neutral-900/60 border border-amber-900/30 px-3 py-2.5 hover:border-amber-700/50 transition-colors"
+              >
+                <div className="flex items-center gap-2 min-w-0">
+                  <span className="text-xs font-extrabold text-amber-100 truncate">{m.username}</span>
+                  <span className="text-[10px] text-neutral-500">best {m.best_streak}d</span>
+                </div>
+                <span className="text-[10px] text-amber-300 font-mono shrink-0">{m.current_streak}d current</span>
+              </a>
+            ))}
+          </div>
+        </section>
+      )}
     </div>
+  );
+}
+
+function TopList({
+  title,
+  subtitle,
+  emptyText,
+  entries,
+}: {
+  title: string;
+  subtitle: string;
+  emptyText: string;
+  entries: { id: string; label: string; href: string; primary: string; secondary: string | null; rank: number }[];
+}) {
+  return (
+    <section className="rounded-2xl border border-neutral-800 bg-[#121212]/60 p-6">
+      <h3 className="text-xs font-extrabold text-neutral-500 uppercase tracking-[0.2em] mb-1">{title}</h3>
+      <p className="text-[10px] text-neutral-500 mb-4">{subtitle}</p>
+      {entries.length === 0 ? (
+        <p className="text-xs text-neutral-500 text-center py-4">{emptyText}</p>
+      ) : (
+        <ol className="space-y-1.5">
+          {entries.map((e) => (
+            <li key={e.id}>
+              <a
+                href={e.href}
+                className="flex items-center gap-3 rounded-lg bg-neutral-900/40 border border-neutral-900 px-3 py-2.5 hover:border-amber-700/30 transition-colors"
+              >
+                <span className="w-6 h-6 rounded-md bg-amber-500/15 text-amber-300 text-[10px] font-extrabold flex items-center justify-center shrink-0">
+                  {e.rank}
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs font-extrabold text-white truncate">{e.label}</p>
+                  {e.secondary && <p className="text-[10px] text-neutral-500 mt-0.5">{e.secondary}</p>}
+                </div>
+                <span className="text-xs font-mono text-amber-300 font-extrabold shrink-0">{e.primary}</span>
+              </a>
+            </li>
+          ))}
+        </ol>
+      )}
+    </section>
   );
 }
 
