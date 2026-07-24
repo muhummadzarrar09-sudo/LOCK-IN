@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { CheckCircle2, Circle, XCircle, Flame, Shield, LogOut, Info, X, Sparkles, Trophy, PartyPopper, Share2, Calendar } from 'lucide-react';
+import { CheckCircle2, Circle, XCircle, Flame, Shield, LogOut, Info, X, Sparkles, Trophy, PartyPopper, Share2, Calendar, Image as ImageIcon } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import Navbar from '@/components/Navbar';
 import PageHeader from '@/components/PageHeader';
@@ -15,6 +15,7 @@ import { DashboardTeamPulse } from '@/components/DashboardTeamPulse';
 import { NextMilestone } from '@/components/NextMilestone';
 import { WeeklyRecapModal } from '@/components/WeeklyRecapModal';
 import { CohortComparison } from '@/components/CohortComparison';
+import { ShareCardModal } from '@/components/ShareCardModal';
 import { WeekProgressRing } from '@/components/WeekProgressRing';
 import { ACHIEVEMENTS, AchievementCode, getAchievement } from '@/lib/achievements';
 
@@ -48,6 +49,7 @@ export default function DashboardPage() {
   const [timezone, setTimezone] = useState('');
   const [today, setToday] = useState('');
   const [userEmail, setUserEmail] = useState('');
+  const [profile, setProfile] = useState<{ username: string } | null>(null);
   const [cohort, setCohort] = useState<any>(null);
   const [loadingAuth, setLoadingAuth] = useState(true);
   const [loadingBlocks, setLoadingBlocks] = useState(true);
@@ -55,6 +57,8 @@ export default function DashboardPage() {
   const [helpOpen, setHelpOpen] = useState(false);
   const [justCheckedId, setJustCheckedId] = useState<string | null>(null);
   const [celebrateCode, setCelebrateCode] = useState<AchievementCode | null>(null);
+  const [shareCardOpen, setShareCardOpen] = useState(false);
+  const [totalCheckIns, setTotalCheckIns] = useState(0);
   const [myTeamIds, setMyTeamIds] = useState<string[]>([]);
   const [myTeamName, setMyTeamName] = useState<string | null>(null);
   // Snapshot of earned achievements, taken right after a check-in.
@@ -81,7 +85,10 @@ export default function DashboardPage() {
         if (session.user.email) setUserEmail(session.user.email);
 
         // Role (loaded but not currently surfaced on dashboard; available for future use)
-        await supabase.from('profiles').select('role').eq('id', uid).maybeSingle();
+        const { data: prof } = await supabase.from('profiles').select('role, username').eq('id', uid).maybeSingle();
+        if (prof) {
+          setProfile({ username: (prof as any).username || '' });
+        }
 
         // Active cohort (enrollment_open=true or current date in range)
         const { data: cohortData } = await supabase
@@ -102,6 +109,13 @@ export default function DashboardPage() {
         // Snapshot earned achievements — used to detect a NEW unlock on check-in
         const { data: earned } = await supabase.from('achievements').select('code').eq('user_id', uid);
         earnedBeforeRef.current = new Set((earned || []).map((a: any) => a.code));
+
+        // Total check-ins (for share card + lifetime counter)
+        const { count: tci } = await supabase
+          .from('check_ins')
+          .select('*', { count: 'exact', head: true })
+          .eq('user_id', uid);
+        setTotalCheckIns(tci || 0);
 
         // Load team memberships for the team pulse card
         const { data: myMemberships } = await supabase
@@ -390,6 +404,14 @@ export default function DashboardPage() {
                 History
               </a>
               <button
+                onClick={() => setShareCardOpen(true)}
+                className="hidden sm:inline-flex h-9 px-2.5 items-center gap-1.5 rounded-lg bg-amber-400/10 border border-amber-500/30 text-[11px] font-bold text-amber-300 hover:bg-amber-400/15 transition-colors"
+                title="Get a 1200x1200 share card"
+              >
+                <ImageIcon className="w-3.5 h-3.5" />
+                Share
+              </button>
+              <button
                 onClick={handleSignOut}
                 className="w-9 h-9 rounded-lg bg-neutral-900 border border-neutral-800 flex items-center justify-center hover:border-neutral-600 transition-colors"
                 aria-label="Sign out"
@@ -539,10 +561,23 @@ export default function DashboardPage() {
       {/* Weekly recap modal — shows once per week on the dashboard */}
       <WeeklyRecapModal />
 
+      {/* Share card generator — opens via the Share button in the header
+          or from the achievement celebration modal. */}
+      <ShareCardModal
+        open={shareCardOpen}
+        onClose={() => setShareCardOpen(false)}
+        username={profile?.username || null}
+        streak={streak}
+        bestStreak={bestStreak}
+        totalCheckIns={totalCheckIns}
+        cohortDay={cohortDayInfo.hidden ? undefined : cohortDayInfo.dayNumber}
+      />
+
       {/* Achievement celebration — shown when a new badge is unlocked */}
       <AchievementCelebration
         code={celebrateCode}
         onClose={() => setCelebrateCode(null)}
+        username={profile?.username || null}
       />
 
       {/* Help modal — replaces the static "Evidence-Based Structure" panel */}

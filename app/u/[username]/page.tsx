@@ -2,12 +2,13 @@
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, Flame, Trophy, Award, Sparkles, Target, Share2, Check, Eye } from 'lucide-react';
+import { ArrowLeft, Flame, Trophy, Award, Sparkles, Target, Share2, Check, Eye, Image as ImageIcon } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import Navbar from '@/components/Navbar';
 import { initials, relativeTime } from '@/lib/ui';
 import { AchievementGrid } from '@/components/AchievementBadge';
 import { useToast } from '@/components/Toast';
+import { ShareCardModal } from '@/components/ShareCardModal';
 
 type ProfileData = {
   id: string;
@@ -29,6 +30,7 @@ export default function PublicProfilePage() {
   const [notFound, setNotFound] = useState(false);
   const [viewCount, setViewCount] = useState<number>(0);
   const [shareCopied, setShareCopied] = useState(false);
+  const [cardOpen, setCardOpen] = useState(false);
 
   useEffect(() => {
     if (!username) return;
@@ -186,6 +188,14 @@ export default function PublicProfilePage() {
                   {viewCount} {viewCount === 1 ? 'view' : 'views'}
                 </span>
               )}
+              <button
+                onClick={() => setCardOpen(true)}
+                className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg bg-amber-400/10 border border-amber-500/30 text-amber-300 text-xs font-bold hover:bg-amber-400/15 transition-colors"
+                title="Download a 1200x1200 share card"
+              >
+                <ImageIcon className="w-3.5 h-3.5" />
+                Get card
+              </button>
             </div>
           </div>
 
@@ -249,6 +259,14 @@ export default function PublicProfilePage() {
           </section>
         </div>
       </main>
+
+      <ShareCardModal
+        open={cardOpen}
+        onClose={() => setCardOpen(false)}
+        username={profile.username}
+        streak={profile.streak?.current_streak ?? 0}
+        bestStreak={profile.streak?.best_streak ?? 0}
+      />
     </>
   );
 }
