@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState, useMemo, useCallback } from 'react';
 import Link from 'next/link';
-import { Trophy, Crown, Medal, Award, Search, Activity } from 'lucide-react';
+import { Trophy, Crown, Search, Activity } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import Navbar from '@/components/Navbar';
 import PageHeader from '@/components/PageHeader';
@@ -19,20 +19,6 @@ type LeaderEntry = {
 };
 
 const PAGE_SIZE = 30;
-
-function rankIcon(rank: number) {
-  if (rank === 1) return <Crown className="w-4 h-4 text-amber-300" strokeWidth={2.2} />;
-  if (rank === 2) return <Medal className="w-4 h-4 text-neutral-300" strokeWidth={2.2} />;
-  if (rank === 3) return <Award className="w-4 h-4 text-amber-600" strokeWidth={2.2} />;
-  return null;
-}
-
-function rankStyle(rank: number) {
-  if (rank === 1) return 'bg-gradient-to-r from-amber-500/15 to-amber-700/10 border-amber-500/40';
-  if (rank === 2) return 'bg-gradient-to-r from-neutral-300/10 to-transparent border-neutral-300/20';
-  if (rank === 3) return 'bg-gradient-to-r from-amber-700/15 to-transparent border-amber-700/30';
-  return 'bg-[#121212]/60 border-neutral-800';
-}
 
 export default function LeaderboardPage() {
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
@@ -173,30 +159,7 @@ export default function LeaderboardPage() {
               {topThree.length > 0 && (
                 <div className="mb-6">
                   <h2 className="text-[10px] font-extrabold text-neutral-500 uppercase tracking-[0.2em] mb-3">Top of cohort</h2>
-                  <div className="space-y-2">
-                    {topThree.map((e) => (
-                      <Link
-                        key={e.id}
-                        href={`/u/${e.username}`}
-                        className={`block rounded-xl border p-4 hover:opacity-90 transition-opacity ${rankStyle(e.rank)}`}
-                      >
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-3 min-w-0">
-                            <div className="w-7 h-7 rounded-lg bg-black/40 flex items-center justify-center shrink-0">
-                              {rankIcon(e.rank) || <span className="text-xs font-mono text-neutral-500">{e.rank}</span>}
-                            </div>
-                            <div className="min-w-0">
-                              <p className={`text-sm font-extrabold truncate ${e.id === currentUserId ? 'text-amber-100' : 'text-white'}`}>
-                                {e.username}
-                                {e.id === currentUserId && <span className="ml-2 text-[9px] px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 font-bold">YOU</span>}
-                              </p>
-                            </div>
-                          </div>
-                          <span className="text-amber-300 font-black text-sm shrink-0 ml-2">{e.streak}</span>
-                        </div>
-                      </Link>
-                    ))}
-                  </div>
+                  <Podium entries={topThree} currentUserId={currentUserId} />
                 </div>
               )}
 
@@ -234,4 +197,105 @@ export default function LeaderboardPage() {
       </main>
     </>
   );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Podium: 2nd, 1st, 3rd in classic Olympic order
+// ─────────────────────────────────────────────────────────────────────────────
+
+type PodiumEntry = { id: string; username: string; streak: number; rank: number };
+
+function Podium({ entries, currentUserId }: { entries: PodiumEntry[]; currentUserId: string | null }) {
+  // Reorder to [2nd, 1st, 3rd] for the visual podium
+  const second = entries.find((e) => e.rank === 2);
+  const first = entries.find((e) => e.rank === 1);
+  const third = entries.find((e) => e.rank === 3);
+  const ordered = [second, first, third].filter(Boolean) as PodiumEntry[];
+
+  if (ordered.length === 0) return null;
+
+  return (
+    <div className="grid grid-cols-3 gap-2 items-end">
+      {ordered.map((e) => (
+        <PodiumColumn
+          key={e.id}
+          entry={e}
+          isFirst={e.rank === 1}
+          isYou={e.id === currentUserId}
+        />
+      ))}
+    </div>
+  );
+}
+
+function PodiumColumn({ entry, isFirst, isYou }: { entry: PodiumEntry; isFirst: boolean; isYou: boolean }) {
+  // Heights reflect rank
+  const heightClass = isFirst
+    ? 'h-32 sm:h-36'
+    : entry.rank === 2
+    ? 'h-24 sm:h-28'
+    : 'h-20 sm:h-24';
+
+  const ringColor = isFirst
+    ? 'from-amber-400 to-amber-600'
+    : entry.rank === 2
+    ? 'from-neutral-300 to-neutral-500'
+    : 'from-amber-700 to-amber-900';
+
+  const bgGradient = isFirst
+    ? 'from-amber-500/20 via-amber-600/10 to-amber-700/5'
+    : entry.rank === 2
+    ? 'from-neutral-300/10 via-neutral-400/5 to-transparent'
+    : 'from-amber-700/15 via-amber-800/5 to-transparent';
+
+  return (
+    <Link
+      href={`/u/${entry.username}`}
+      className="flex flex-col items-center group"
+      aria-label={`Rank ${entry.rank}: ${entry.username}, ${entry.streak}-day streak`}
+    >
+      {/* Avatar circle */}
+      <div
+        className={`relative w-12 h-12 sm:w-14 sm:h-14 rounded-full flex items-center justify-center text-sm sm:text-base font-extrabold text-black bg-gradient-to-br ${ringColor} mb-2 group-hover:scale-105 transition-transform`}
+        style={{
+          boxShadow: isFirst
+            ? '0 0 0 4px rgba(251, 191, 36, 0.15), 0 8px 30px -6px rgba(251, 191, 36, 0.4)'
+            : '0 0 0 3px rgba(255, 255, 255, 0.05)',
+        }}
+      >
+        {initials(entry.username)}
+        {isFirst && (
+          <div className="absolute -top-3 left-1/2 -translate-x-1/2">
+            <Crown className="w-5 h-5 text-amber-300 drop-shadow" strokeWidth={2.2} fill="currentColor" fillOpacity={0.15} />
+          </div>
+        )}
+        {isYou && (
+          <span className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 px-1.5 py-0.5 rounded text-[8px] font-extrabold tracking-wider uppercase bg-amber-400 text-black shadow">
+            You
+          </span>
+        )}
+      </div>
+      <p className={`text-[11px] sm:text-xs font-extrabold truncate max-w-full ${isYou ? 'text-amber-100' : 'text-white'}`}>
+        {entry.username}
+      </p>
+      <p className="text-[10px] text-neutral-500 font-mono mb-2">#{entry.rank}</p>
+
+      {/* Streak box */}
+      <div
+        className={`w-full ${heightClass} rounded-t-xl bg-gradient-to-b ${bgGradient} border border-b-0 border-neutral-800/60 flex flex-col items-center justify-end pb-2 px-1`}
+      >
+        <p className={`text-2xl sm:text-3xl font-black leading-none ${isFirst ? 'text-amber-200' : entry.rank === 2 ? 'text-neutral-200' : 'text-amber-700/80'}`}>
+          {entry.streak}
+        </p>
+        <p className="text-[9px] uppercase tracking-wider text-neutral-500 font-bold mt-0.5">days</p>
+      </div>
+    </Link>
+  );
+}
+
+function initials(name: string): string {
+  if (!name) return '?';
+  const parts = name.replace(/[^a-zA-Z0-9 ]/g, '').trim().split(/\s+/);
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[1][0]).toUpperCase();
 }

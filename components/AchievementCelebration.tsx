@@ -1,8 +1,9 @@
 'use client';
 
 import { useEffect, useState, useRef } from 'react';
-import { Crown, Sparkles, X, Award } from 'lucide-react';
+import { Crown, Sparkles, X, Award, Share2, Copy, Check } from 'lucide-react';
 import { getAchievement } from '@/lib/achievements';
+import { useToast } from './Toast';
 
 type Props = {
   code: string | null;
@@ -12,13 +13,16 @@ type Props = {
 // Full-screen celebration when a new badge is unlocked.
 // Auto-dismisses after 5s but stays interactive.
 export function AchievementCelebration({ code, onClose }: Props) {
+  const toast = useToast();
   const [open, setOpen] = useState(false);
+  const [copied, setCopied] = useState(false);
   const lastShownRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (!code || lastShownRef.current === code) return;
     lastShownRef.current = code;
     setOpen(true);
+    setCopied(false);
     // Best-effort: also fire a real OS notification so the user sees it
     // even if they have the tab backgrounded.
     if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
@@ -35,7 +39,7 @@ export function AchievementCelebration({ code, onClose }: Props) {
     const t = setTimeout(() => {
       setOpen(false);
       setTimeout(onClose, 220);
-    }, 5000);
+    }, 8000); // a bit longer now that we have a share button
     return () => clearTimeout(t);
   }, [code, onClose]);
 
@@ -50,6 +54,24 @@ export function AchievementCelebration({ code, onClose }: Props) {
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [open, onClose]);
+
+  const handleShare = async () => {
+    const meta = getAchievement(code!);
+    if (!meta) return;
+    const text = `I just unlocked "${meta.title}" on Discipline. ${meta.blurb}`;
+    const url = typeof window !== 'undefined' ? window.location.origin : 'https://lockin.app';
+    const nav: any = typeof navigator !== 'undefined' ? navigator : null;
+    try {
+      if (nav && typeof nav.share === 'function') {
+        await nav.share({ title: `${meta.title} unlocked`, text, url });
+      } else if (nav && nav.clipboard) {
+        await nav.clipboard.writeText(`${text} ${url}`);
+        setCopied(true);
+        toast.success('Copied to clipboard');
+        setTimeout(() => setCopied(false), 2200);
+      }
+    } catch { /* user cancelled */ }
+  };
 
   if (!code) return null;
   const meta = getAchievement(code);
@@ -128,6 +150,14 @@ export function AchievementCelebration({ code, onClose }: Props) {
           <p className="text-sm text-neutral-300 leading-relaxed mb-5">
             {meta.blurb}
           </p>
+
+          <button
+            onClick={handleShare}
+            className="w-full inline-flex items-center justify-center gap-2 h-10 px-4 rounded-xl bg-amber-400 text-black font-extrabold text-sm hover:bg-amber-300 transition-colors mb-3"
+          >
+            {copied ? <Check className="w-4 h-4" /> : <Share2 className="w-4 h-4" />}
+            {copied ? 'Copied' : 'Share this badge'}
+          </button>
 
           <div className="text-[10px] uppercase tracking-[0.2em] text-neutral-500 font-bold border-t border-neutral-900 pt-3">
             {meta.trigger}

@@ -13,6 +13,7 @@ import { StreakFreezeBanner } from '@/components/StreakFreezeBanner';
 import { AchievementCelebration } from '@/components/AchievementCelebration';
 import { DashboardTeamPulse } from '@/components/DashboardTeamPulse';
 import { NextMilestone } from '@/components/NextMilestone';
+import { WeeklyRecapModal } from '@/components/WeeklyRecapModal';
 import { ACHIEVEMENTS, AchievementCode, getAchievement } from '@/lib/achievements';
 
 type BlockType = 'work' | 'break' | 'movement' | 'reflection';
@@ -520,6 +521,9 @@ export default function DashboardPage() {
       </main>
 
       <OnboardingHint />
+
+      {/* Weekly recap modal — shows once per week on the dashboard */}
+      <WeeklyRecapModal />
 
       {/* Achievement celebration — shown when a new badge is unlocked */}
       <AchievementCelebration
