@@ -456,6 +456,12 @@ function SettingsPageInner() {
               >
                 Help & FAQ
               </a>
+              <a
+                href="/whats-new"
+                className="h-10 px-4 rounded-lg bg-neutral-900 border border-neutral-800 text-neutral-300 font-semibold text-sm hover:border-neutral-600 inline-flex items-center gap-2 transition-colors"
+              >
+                <Sparkles className="w-3.5 h-3.5" /> What\u2019s new
+              </a>
               <button
                 onClick={() => {
                   // Reset onboarding + welcome state, then redirect to welcome

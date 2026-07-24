@@ -25,6 +25,7 @@ const STATIC_ITEMS: Item[] = [
   { id: 'reports', label: 'Reports', hint: 'Curated frameworks', href: '/reports', icon: <FileText className="w-4 h-4" />, group: 'Navigate' },
   { id: 'community', label: 'Community', hint: 'Announcements', href: '/community', icon: <MessageCircle className="w-4 h-4" />, group: 'Navigate' },
   { id: 'help', label: 'Help & FAQ', hint: 'Common questions', href: '/help', icon: <LifeBuoy className="w-4 h-4" />, group: 'Navigate' },
+  { id: 'whatsnew', label: 'What\u2019s new', hint: 'Recent releases', href: '/whats-new', icon: <Sparkles className="w-4 h-4" />, group: 'Navigate' },
   { id: 'settings', label: 'Settings', hint: 'Profile, reminders', href: '/settings', icon: <Sliders className="w-4 h-4" />, group: 'Navigate' },
   { id: 'login', label: 'Sign in', href: '/auth/login', icon: <LogIn className="w-4 h-4" />, group: 'Navigate' },
   { id: 'signup', label: 'Create account', href: '/auth/signup', icon: <UserPlus className="w-4 h-4" />, group: 'Navigate' },
