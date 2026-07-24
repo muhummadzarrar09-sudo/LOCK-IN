@@ -34,6 +34,8 @@ export default function AdminPage() {
     pct: number;
     phase: 'pre' | 'running' | 'done';
     activeRate: number;
+    healthScore: number; // 0-100 composite
+    healthLabel: 'thriving' | 'steady' | 'at risk';
   } | null>(null);
 
   const [reportForm, setReportForm] = useState({ title: '', body: '' });
@@ -157,7 +159,22 @@ export default function AdminPage() {
       const activeRate = (totalMembers || 0) > 0
         ? Math.round((activeUsers / (totalMembers || 1)) * 100)
         : 0;
-      setCohortProgress({ dayNumber: Math.max(1, Math.min(total, dayNumber)), total, pct, phase, activeRate });
+      // Composite health score: 60% from today's activity, 40% from
+      // average streak. Streak capped at 30d for normalization.
+      const streakComponent = Math.min(100, ((streakAvg || 0) / 30) * 100);
+      const activityComponent = activeRate;
+      const healthScore = Math.round(activityComponent * 0.6 + streakComponent * 0.4);
+      const healthLabel: 'thriving' | 'steady' | 'at risk' =
+        healthScore >= 70 ? 'thriving' : healthScore >= 40 ? 'steady' : 'at risk';
+      setCohortProgress({
+        dayNumber: Math.max(1, Math.min(total, dayNumber)),
+        total,
+        pct,
+        phase,
+        activeRate,
+        healthScore,
+        healthLabel,
+      });
     } else {
       setCohortProgress(null);
     }
@@ -611,12 +628,14 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   );
 }
 
-function CohortProgressCard({ dayNumber, total, pct, phase, activeRate }: {
+function CohortProgressCard({ dayNumber, total, pct, phase, activeRate, healthScore, healthLabel }: {
   dayNumber: number;
   total: number;
   pct: number;
   phase: 'pre' | 'running' | 'done';
   activeRate: number;
+  healthScore: number;
+  healthLabel: 'thriving' | 'steady' | 'at risk';
 }) {
   const phaseCopy =
     phase === 'pre' ? 'Pre-cohort' :
@@ -626,6 +645,14 @@ function CohortProgressCard({ dayNumber, total, pct, phase, activeRate }: {
     phase === 'pre' ? 'text-amber-200' :
     phase === 'done' ? 'text-violet-200' :
     'text-emerald-200';
+  const healthColor =
+    healthLabel === 'thriving' ? 'text-emerald-300 border-emerald-700/40 bg-emerald-950/30' :
+    healthLabel === 'steady' ? 'text-amber-300 border-amber-700/40 bg-amber-950/30' :
+    'text-red-300 border-red-700/40 bg-red-950/30';
+  const healthEmoji =
+    healthLabel === 'thriving' ? '🔥' :
+    healthLabel === 'steady' ? '⚖️' :
+    '⚠️';
 
   return (
     <div className="mb-6 rounded-2xl border border-amber-700/30 bg-gradient-to-br from-amber-950/30 to-amber-900/5 p-5 md:p-6">
@@ -647,10 +674,22 @@ function CohortProgressCard({ dayNumber, total, pct, phase, activeRate }: {
           style={{ width: `${pct}%` }}
         />
       </div>
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-4">
         <Mini label="Active today" value={`${activeRate}%`} />
         <Mini label="Days remaining" value={String(Math.max(0, total - dayNumber))} />
         <Mini label="Completion" value={`${pct}%`} />
+      </div>
+      <div className={`rounded-xl border p-3 flex items-center gap-3 ${healthColor}`}>
+        <span className="text-xl shrink-0">{healthEmoji}</span>
+        <div className="flex-1 min-w-0">
+          <p className="text-[10px] uppercase tracking-[0.2em] font-bold opacity-80">Cohort health</p>
+          <p className="text-sm font-extrabold capitalize leading-tight">{healthLabel} · {healthScore}/100</p>
+        </div>
+        <p className="text-[10px] opacity-70 leading-tight text-right max-w-[120px]">
+          {healthLabel === 'thriving' ? 'Momentum is real. Keep doing what you\u2019re doing.' :
+           healthLabel === 'steady' ? 'Cohort is holding. Look at the nudge list.' :
+           'Activity dipping. Time to reach out.'}
+        </p>
       </div>
     </div>
   );
