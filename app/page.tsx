@@ -1,6 +1,11 @@
 import Link from 'next/link';
 import { ArrowRight, ShieldCheck, Zap, Clock, Users, Trophy, CheckCircle2 } from 'lucide-react';
 
+// Landing page is fully static — generated at build time, served from edge
+// forever. The marketing copy rarely changes; when it does, redeploy.
+export const dynamic = 'force-static';
+export const revalidate = false;
+
 export default function HomePage() {
   return (
     <main id="main-content" className="min-h-screen bg-[#0D0D0D] text-[#F2F2F2] selection:bg-amber-500/20">

@@ -1,5 +1,8 @@
 import type { MetadataRoute } from 'next';
 
+// Sitemap regenerates every hour. Cached at the edge.
+export const revalidate = 3600;
+
 const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL || 'https://lockin.app';
 
 export default function sitemap(): MetadataRoute.Sitemap {

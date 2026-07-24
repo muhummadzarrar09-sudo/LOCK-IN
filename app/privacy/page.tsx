@@ -2,6 +2,10 @@ import Link from 'next/link';
 import { ArrowLeft, Shield } from 'lucide-react';
 import type { Metadata } from 'next';
 
+// Force static generation — this page is content-stable, served from edge forever.
+export const dynamic = 'force-static';
+export const revalidate = false;
+
 export const metadata: Metadata = {
   title: 'Privacy Policy',
   description: 'How Discipline collects, uses, and protects your data.',

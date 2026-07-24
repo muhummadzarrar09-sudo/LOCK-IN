@@ -1,4 +1,4 @@
-'use client';
+"use client";
 import { useState, useMemo } from 'react';
 import Link from 'next/link';
 import { ArrowLeft, Search, ChevronDown, MessageCircle, Mail, LifeBuoy, BookOpen } from 'lucide-react';
@@ -11,30 +11,23 @@ type FaqItem = {
 };
 
 const FAQ: FaqItem[] = [
-  // Getting started
   { cat: 'getting-started', q: 'What is a "30-day cohort"?', a: 'A fixed group of members who start the 30-day execution program on the same day. You check in to time blocks daily, your team sees your progress, and you ship together. After 30 days, the cohort closes. A new one starts the following month.' },
   { cat: 'getting-started', q: 'What happens on Day 1?', a: <>Your first 6 time blocks unlock at 06:00 in your local timezone. You check in to each block as you complete it. Your team sees your check-ins in real time. By end of Day 1, you should have a full day of evidence that you showed up.</> },
   { cat: 'getting-started', q: 'I missed a block. Now what?', a: 'Tap the block in your dashboard. You can check in late — but the streak reflects what really happened. We don\'t fudge the numbers. The good news: tomorrow is a new day.' },
-  { cat: 'getting-started', q: 'Do I need to use this at exactly 06:00?', a: <>No. Your time blocks are scheduled for your timezone, but you can check in at any time during or after the block. The "now" highlight just shows which block is current.</> },
-
-  // Cohort
+  { cat: 'getting-started', q: 'Do I need to use this at exactly 06:00?', a: <>No. Your time blocks are scheduled for your timezone, but you can check in at any time during or after the block. The &ldquo;now&rdquo; highlight just shows which block is current.</> },
   { cat: 'cohort', q: 'What is a time block?', a: 'A scheduled chunk of time (usually 90–180 minutes) where you focus on a specific activity. The default schedule is: 06:00 deep work, 09:00 break, 09:30 deep work, 12:00 movement, 12:30 reflection, 13:00 deep work. You can customize your own schedule in the dashboard.' },
   { cat: 'cohort', q: 'What does "streak" mean?', a: 'The number of consecutive days you\'ve checked in to at least one block. A streak breaks when you miss an entire day. Your best streak is the longest streak you\'ve ever achieved.' },
   { cat: 'cohort', q: 'How are the leaderboard rankings calculated?', a: 'Members are ranked by their current streak. Ties are broken by username (alphabetical). The cohort average is shown so you can see how you compare.' },
   { cat: 'cohort', q: 'Can I be in more than one cohort?', a: <>No. The cohort is meant to be a 30-day focused commitment. You can re-enroll in a future cohort after your current one ends.</> },
-
-  // Team
   { cat: 'team', q: 'How are teams assigned?', a: 'Your cohort lead assigns you to a squad of 3–4 members before Day 1. Teams are formed based on the startup idea you\'re working on, so you\'re accountable to people building the same kind of thing.' },
   { cat: 'team', q: 'What is the team feed?', a: 'A shared log where your teammates post updates on what they shipped. It\'s a low-friction way to stay in sync without needing to schedule calls. The "What did you ship today?" input on the Team page is how you post.' },
   { cat: 'team', q: 'Can I change teams?', a: <>Not during a cohort. Teams are intentionally stable for the 30 days. If there\'s a real issue, contact your cohort lead.</> },
   { cat: 'team', q: 'Who can see my team feed posts?', a: 'Only your team. The team feed is private to your squad. The public community feed (announcements from your cohort lead) is different — that\'s everyone.' },
-
-  // Account
   { cat: 'account', q: 'How do I change my username?', a: <>Go to <Link href="/settings" className="text-amber-300 hover:text-amber-200 underline">Settings</Link>, click Edit next to your username, change it, and save. Your new name shows up immediately on the leaderboard and team feed.</> },
-  { cat: 'account', q: 'How do I change my timezone?', a: <>Settings → Edit profile → change timezone. The dashboard uses this for time-block scheduling. If you travel, update it and the dashboard recalculates your "now" highlight.</> },
-  { cat: 'account', q: 'How do I delete my account?', a: <>Go to <Link href="/settings/delete" className="text-amber-300 hover:text-amber-200 underline">Settings → Delete account</Link>. We\'ll ask you to confirm, then permanently delete your profile, check-ins, team feed posts, and streaks. This is irreversible.</> },
-  { cat: 'account', q: 'I\'m not getting reminders. What\'s wrong?', a: <>Open <Link href="/settings" className="text-amber-300 hover:text-amber-200 underline">Settings → Reminders</Link>. You\'ll see a permission banner if your browser is blocking notifications. Click "Enable reminders" and approve the browser prompt.</> },
-  { cat: 'account', q: 'Can I export my data?', a: <>Email <a href="mailto:support@accountability.com" className="text-amber-300 hover:text-amber-200 underline">support@accountability.com</a> and we\'ll send you a JSON export of your profile, check-ins, streaks, and team feed posts within 48 hours.</> },
+  { cat: 'account', q: 'How do I change my timezone?', a: <>Settings → Edit profile → change timezone. The dashboard uses this for time-block scheduling. If you travel, update it and the dashboard recalculates your &ldquo;now&rdquo; highlight.</> },
+  { cat: 'account', q: 'How do I delete my account?', a: <>Go to <Link href="/settings/delete" className="text-amber-300 hover:text-amber-200 underline">Settings → Delete account</Link>. We&apos;ll ask you to confirm, then permanently delete your profile, check-ins, team feed posts, and streaks. This is irreversible.</> },
+  { cat: 'account', q: 'I\'m not getting reminders. What\'s wrong?', a: <>Open <Link href="/settings" className="text-amber-300 hover:text-amber-200 underline">Settings → Reminders</Link>. You&apos;ll see a permission banner if your browser is blocking notifications. Click &ldquo;Enable reminders&rdquo; and approve the browser prompt.</> },
+  { cat: 'account', q: 'Can I export my data?', a: <>Email <a href="mailto:support@accountability.com" className="text-amber-300 hover:text-amber-200 underline">support@accountability.com</a> and we&apos;ll send you a JSON export of your profile, check-ins, streaks, and team feed posts within 48 hours.</> },
 ];
 
 const CATS = [
@@ -73,7 +66,7 @@ export default function HelpPage() {
               <LifeBuoy className="w-5 h-5 text-amber-300" />
             </div>
             <div>
-              <h1 className="text-2xl md:text-3xl font-extrabold tracking-tighter text-white">Help & FAQ</h1>
+              <h1 className="text-2xl md:text-3xl font-extrabold tracking-tighter text-white">Help &amp; FAQ</h1>
               <p className="text-[11px] text-neutral-500">Answers to the most common questions.</p>
             </div>
           </div>

@@ -79,9 +79,36 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en" className="dark">
       <head>
+        {/* DNS prefetch + preconnect — cuts ~100-300ms off first paint */}
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        {/* Preconnect to Supabase for faster auth on first interaction */}
+        <link rel="dns-prefetch" href="https://supabase.co" />
         <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@300;400;600;800;900&display=swap" rel="stylesheet" />
+
+        {/* Speculation Rules API — pre-render next navigation on hover (Chrome 109+).
+            Makes dashboard→leaderboard→team→reports feel instant. */}
+        <script
+          type="speculationrules"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify({
+              prefetch: [
+                {
+                  source: 'document',
+                  where: { and: [{ href_matches: '/*' }, { not: { href_matches: ['/api/*', '/auth/*', '/admin/*', '/settings/*', '/welcome', '/_next/*'] } }] },
+                  eagerness: 'moderate',
+                },
+              ],
+              prerender: [
+                {
+                  source: 'document',
+                  where: { and: [{ href_matches: '/*' }, { not: { href_matches: ['/api/*', '/auth/*', '/admin/*', '/settings/*', '/welcome', '/_next/*'] } }] },
+                  eagerness: 'moderate',
+                },
+              ],
+            }),
+          }}
+        />
       </head>
       <body className="bg-[#0D0D0D] text-[#F2F2F2] antialiased font-sans selection:bg-amber-500/20 selection:text-amber-200">
         <a href="#main-content" className="skip-to-content">

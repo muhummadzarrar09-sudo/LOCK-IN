@@ -2,6 +2,10 @@ import Link from 'next/link';
 import { ArrowLeft, ScrollText } from 'lucide-react';
 import type { Metadata } from 'next';
 
+// Force static generation — content-stable, served from edge forever.
+export const dynamic = 'force-static';
+export const revalidate = false;
+
 export const metadata: Metadata = {
   title: 'Terms of Service',
   description: 'The terms under which you can use Discipline.',
