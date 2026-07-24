@@ -12,6 +12,7 @@ import { OnboardingHint } from '@/components/OnboardingHint';
 import { StreakFreezeBanner } from '@/components/StreakFreezeBanner';
 import { AchievementCelebration } from '@/components/AchievementCelebration';
 import { DashboardTeamPulse } from '@/components/DashboardTeamPulse';
+import { NextMilestone } from '@/components/NextMilestone';
 import { ACHIEVEMENTS, AchievementCode, getAchievement } from '@/lib/achievements';
 
 type BlockType = 'work' | 'break' | 'movement' | 'reflection';
@@ -398,6 +399,11 @@ export default function DashboardPage() {
 
           {/* Streak freeze banner (if user has unused freezes) */}
           <StreakFreezeBanner />
+
+          {/* Next milestone widget — shows the next badge in the user's path */}
+          <div className="mt-4 mb-2">
+            <NextMilestone currentStreak={streak} />
+          </div>
 
           {/* Day X of 30 strip (demo mode only) */}
           {!cohortDayInfo.hidden && !cohortDayInfo.isPreCohort && !cohortDayInfo.isPostCohort && (
