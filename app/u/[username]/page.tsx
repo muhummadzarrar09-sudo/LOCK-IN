@@ -48,32 +48,32 @@ export default function PublicProfilePage() {
         setLoading(false);
         return;
       }
-      // Fetch streak
-      const { data: streakData } = await supabase
-        .from('streaks')
-        .select('current_streak, best_streak, last_check_in_date')
-        .eq('user_id', prof.id)
-        .maybeSingle();
-      // Fetch achievements
-      const { data: achData } = await supabase
-        .from('achievements')
-        .select('code, earned_at')
-        .eq('user_id', prof.id)
-        .order('earned_at', { ascending: false });
-      // Fetch team (just one)
-      const { data: teamData } = await supabase
-        .from('team_members')
-        .select('team_id, teams:teams!inner(name, startup_title)')
-        .eq('user_id', prof.id)
-        .limit(1)
-        .maybeSingle();
+      // Fetch streak + achievements + team in parallel
+      const [streakRes, achRes, teamRes] = await Promise.all([
+        supabase
+          .from('streaks')
+          .select('current_streak, best_streak, last_check_in_date')
+          .eq('user_id', prof.id)
+          .maybeSingle(),
+        supabase
+          .from('achievements')
+          .select('code, earned_at')
+          .eq('user_id', prof.id)
+          .order('earned_at', { ascending: false }),
+        supabase
+          .from('team_members')
+          .select('team_id, teams:teams!inner(name, startup_title)')
+          .eq('user_id', prof.id)
+          .limit(1)
+          .maybeSingle(),
+      ]);
 
       setProfile({
         ...(prof as any),
-        streak: streakData as any,
-        achievements: (achData as any[]) || [],
-        team: teamData
-          ? { team_id: (teamData as any).team_id, name: (teamData as any).teams?.name, startup_title: (teamData as any).teams?.startup_title }
+        streak: streakRes.data as any,
+        achievements: (achRes.data as any[]) || [],
+        team: teamRes.data
+          ? { team_id: (teamRes.data as any).team_id, name: (teamRes.data as any).teams?.name, startup_title: (teamRes.data as any).teams?.startup_title }
           : null,
       });
       setLoading(false);
