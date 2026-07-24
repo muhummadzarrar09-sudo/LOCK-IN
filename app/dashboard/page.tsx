@@ -392,6 +392,11 @@ export default function DashboardPage() {
               <p className="text-[11px] text-neutral-500 tracking-wide truncate">
                 {today}{timezone ? ` · ${timezone}` : ''}
               </p>
+              {totalCheckIns > 0 && (
+                <p className="text-[10px] text-amber-300/70 font-bold tracking-wide mt-0.5">
+                  {totalCheckIns} {totalCheckIns === 1 ? 'check-in' : 'check-ins'} · lifetime
+                </p>
+              )}
             </div>
             <div className="flex items-center gap-2 shrink-0">
               <div data-onboarding="streak"><StreakChip streak={streak} best={bestStreak} showBest={bestStreak > 0} /></div>

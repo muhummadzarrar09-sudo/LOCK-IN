@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { usePathname } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { useToast } from './Toast';
 
@@ -16,7 +15,6 @@ import { useToast } from './Toast';
  */
 export function GlobalRealtimeToaster() {
   const toast = useToast();
-  const pathname = usePathname();
   const seenRef = useRef<Set<string>>(new Set());
   const [userId, setUserId] = useState<string | null>(null);
 
@@ -92,7 +90,7 @@ export function GlobalRealtimeToaster() {
       supabase.removeChannel(communityCh);
       if (teamChannel) supabase.removeChannel(teamChannel);
     };
-  }, [userId, pathname, toast]);
+  }, [userId, toast]);
 
   return null;
 }
