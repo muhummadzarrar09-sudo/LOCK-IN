@@ -17,6 +17,7 @@ import { WeeklyRecapModal } from '@/components/WeeklyRecapModal';
 import { CohortComparison } from '@/components/CohortComparison';
 import { ShareCardModal } from '@/components/ShareCardModal';
 import { WeekProgressRing } from '@/components/WeekProgressRing';
+import { BestTimeInsight } from '@/components/BestTimeInsight';
 import { useToast } from '@/components/Toast';
 import { ACHIEVEMENTS, AchievementCode, getAchievement } from '@/lib/achievements';
 
@@ -407,6 +408,9 @@ export default function DashboardPage() {
                   {totalCheckIns} {totalCheckIns === 1 ? 'check-in' : 'check-ins'} · lifetime
                 </p>
               )}
+              <div className="mt-1.5">
+                <BestTimeInsight userId={userId || ''} />
+              </div>
             </div>
             <div className="flex items-center gap-2 shrink-0">
               <div data-onboarding="streak"><StreakChip streak={streak} best={bestStreak} showBest={bestStreak > 0} /></div>
