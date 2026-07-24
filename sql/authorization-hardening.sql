@@ -132,6 +132,7 @@ FOR EACH ROW EXECUTE FUNCTION prevent_profile_privilege_changes();
 
 DROP POLICY IF EXISTS "Profiles: insert own" ON profiles;
 DROP POLICY IF EXISTS "Profiles: update own" ON profiles;
+DROP POLICY IF EXISTS "Profiles: delete own" ON profiles;
 DROP POLICY IF EXISTS "Profiles: admin update any" ON profiles;
 
 CREATE POLICY "Profiles: insert own member"
@@ -189,6 +190,22 @@ DROP POLICY IF EXISTS "Streaks: user only" ON streaks;
 DROP POLICY IF EXISTS "Streaks: read own" ON streaks;
 CREATE POLICY "Streaks: read own"
   ON streaks FOR SELECT
+  USING (auth.uid() = user_id);
+
+-- ------------------------------------------------------------
+-- Device sessions / reminders: read-only from clients. Writes, if needed,
+-- should happen through server routes so row spam cannot bypass rate limits.
+-- ------------------------------------------------------------
+DROP POLICY IF EXISTS "Device: user only" ON device_sessions;
+DROP POLICY IF EXISTS "Device: read own" ON device_sessions;
+CREATE POLICY "Device: read own"
+  ON device_sessions FOR SELECT
+  USING (auth.uid() = user_id);
+
+DROP POLICY IF EXISTS "Reminders: user only" ON reminders;
+DROP POLICY IF EXISTS "Reminders: read own" ON reminders;
+CREATE POLICY "Reminders: read own"
+  ON reminders FOR SELECT
   USING (auth.uid() = user_id);
 
 -- ------------------------------------------------------------
@@ -286,9 +303,11 @@ CREATE POLICY "Profile views: user can read own"
 -- /api/profile-views with per-user throttling and duplicate coalescing.
 
 -- ------------------------------------------------------------
--- Bug reports: prevent user_email spoofing on direct inserts. The new
--- /api/bug-reports route also sets this server-side.
+-- Bug reports: direct client inserts are disabled. Creation goes through
+-- /api/bug-reports so identity and rate limits cannot be bypassed.
 -- ------------------------------------------------------------
+DROP POLICY IF EXISTS "Bug reports: user can insert own" ON bug_reports;
+
 CREATE OR REPLACE FUNCTION normalize_bug_report_identity()
 RETURNS TRIGGER
 LANGUAGE plpgsql
