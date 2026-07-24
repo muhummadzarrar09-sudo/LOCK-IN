@@ -28,6 +28,13 @@ export default function AdminPage() {
   const [streakAvg, setStreakAvg] = useState<number | null>(null);
   const [reportCount, setReportCount] = useState<number | null>(null);
   const [activeToday, setActiveToday] = useState<number | null>(null);
+  const [cohortProgress, setCohortProgress] = useState<{
+    dayNumber: number;
+    total: number;
+    pct: number;
+    phase: 'pre' | 'running' | 'done';
+    activeRate: number;
+  } | null>(null);
 
   const [reportForm, setReportForm] = useState({ title: '', body: '' });
   const [communityForm, setCommunityForm] = useState({ title: '', body: '' });
@@ -121,6 +128,38 @@ export default function AdminPage() {
       setActiveToday(new Set((todays as any[]).map(c => c.user_id)).size);
     } else {
       setActiveToday(0);
+    }
+
+    // Cohort progress: day X of N + active rate today
+    const [{ data: cohortRow }, { count: totalMembers }] = await Promise.all([
+      supabase
+        .from('cohorts')
+        .select('start_date, end_date')
+        .order('start_date', { ascending: false })
+        .limit(1)
+        .maybeSingle(),
+      supabase
+        .from('profiles')
+        .select('*', { count: 'exact', head: true })
+        .eq('role', 'member'),
+    ]);
+    if (cohortRow && (cohortRow as any).start_date && (cohortRow as any).end_date) {
+      const start = new Date((cohortRow as any).start_date + 'T00:00:00Z');
+      const end = new Date((cohortRow as any).end_date + 'T23:59:59Z');
+      const total = Math.max(1, Math.round((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)));
+      const now = new Date();
+      const diffDays = Math.floor((now.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
+      const dayNumber = diffDays + 1;
+      const phase: 'pre' | 'running' | 'done' =
+        dayNumber < 1 ? 'pre' : dayNumber > total ? 'done' : 'running';
+      const pct = Math.max(0, Math.min(100, Math.round((dayNumber / total) * 100)));
+      const activeUsers = todays ? new Set((todays as any[]).map(c => c.user_id)).size : 0;
+      const activeRate = (totalMembers || 0) > 0
+        ? Math.round((activeUsers / (totalMembers || 1)) * 100)
+        : 0;
+      setCohortProgress({ dayNumber: Math.max(1, Math.min(total, dayNumber)), total, pct, phase, activeRate });
+    } else {
+      setCohortProgress(null);
     }
   };
 
@@ -307,6 +346,9 @@ export default function AdminPage() {
                 <MetricCard icon={TrendingUp} label="Avg streak" value={streakAvg !== null ? `${streakAvg}d` : '—'} />
                 <MetricCard icon={BookOpen} label="Reports" value={reportCount} />
               </div>
+
+              {/* Cohort progress strip — only when an active cohort exists */}
+              {cohortProgress && <CohortProgressCard {...cohortProgress} />}
 
               {/* Tabs */}
               <div className="flex items-center gap-1 mb-5 border-b border-neutral-900 overflow-x-auto">
@@ -565,6 +607,60 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
     <div>
       <label className="block text-[10px] font-bold text-neutral-300 mb-1.5 uppercase tracking-wider">{label}</label>
       {children}
+    </div>
+  );
+}
+
+function CohortProgressCard({ dayNumber, total, pct, phase, activeRate }: {
+  dayNumber: number;
+  total: number;
+  pct: number;
+  phase: 'pre' | 'running' | 'done';
+  activeRate: number;
+}) {
+  const phaseCopy =
+    phase === 'pre' ? 'Pre-cohort' :
+    phase === 'done' ? 'Cohort complete' :
+    'In progress';
+  const phaseColor =
+    phase === 'pre' ? 'text-amber-200' :
+    phase === 'done' ? 'text-violet-200' :
+    'text-emerald-200';
+
+  return (
+    <div className="mb-6 rounded-2xl border border-amber-700/30 bg-gradient-to-br from-amber-950/30 to-amber-900/5 p-5 md:p-6">
+      <div className="flex items-center justify-between mb-3">
+        <div>
+          <p className="text-[10px] uppercase tracking-[0.3em] text-amber-300/70 font-bold">Cohort progress</p>
+          <h2 className="text-2xl md:text-3xl font-black text-amber-100 mt-1 leading-tight">
+            Day {dayNumber} <span className="text-base text-amber-300/60 font-bold">of {total}</span>
+          </h2>
+        </div>
+        <div className="text-right">
+          <p className="text-[10px] uppercase tracking-[0.2em] text-amber-300/60 font-bold">Status</p>
+          <p className={`text-sm font-extrabold ${phaseColor}`}>{phaseCopy}</p>
+        </div>
+      </div>
+      <div className="h-2 w-full bg-neutral-900 rounded-full overflow-hidden mb-4">
+        <div
+          className="h-full bg-gradient-to-r from-amber-500 to-amber-300 rounded-full transition-all duration-700"
+          style={{ width: `${pct}%` }}
+        />
+      </div>
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+        <Mini label="Active today" value={`${activeRate}%`} />
+        <Mini label="Days remaining" value={String(Math.max(0, total - dayNumber))} />
+        <Mini label="Completion" value={`${pct}%`} />
+      </div>
+    </div>
+  );
+}
+
+function Mini({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-lg bg-black/30 border border-amber-700/20 p-2.5">
+      <p className="text-[9px] uppercase tracking-wider text-amber-300/60 font-bold">{label}</p>
+      <p className="text-base font-black text-amber-100 mt-0.5">{value}</p>
     </div>
   );
 }
